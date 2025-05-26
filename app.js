@@ -109,19 +109,21 @@ function renderCalendar(eventsToDisplay) {
 function populateFilterDropdowns() {
     const eventTypeFilter = document.getElementById('eventTypeFilter');
     const churchFilter = document.getElementById('churchFilter');
+    const participantFilter = document.getElementById('participantFilter'); // New filter
 
-    if (!eventTypeFilter || !churchFilter) {
+    if (!eventTypeFilter || !churchFilter || !participantFilter) {
         console.warn("Filter dropdown elements not found in DOM.");
         return;
     }
 
     eventTypeFilter.innerHTML = '<option value="">All Types</option>';
     churchFilter.innerHTML = '<option value="">All Churches</option>';
+    participantFilter.innerHTML = '<option value="">All Ministers/Groups</option>'; // New filter reset
 
     if (allEventsData && allEventsData.length > 0) {
         const uniqueEventTypes = new Set();
         allEventsData.forEach(event => {
-            if(event.EventType) uniqueEventTypes.add(event.EventType);
+            if (event.EventType) uniqueEventTypes.add(event.EventType);
             if(event.extendedProps && event.extendedProps.EventType) uniqueEventTypes.add(event.extendedProps.EventType);
         });
         const eventTypes = [...uniqueEventTypes].filter(Boolean).sort();
@@ -138,30 +140,89 @@ function populateFilterDropdowns() {
         });
     }
 
+    if (allEventParticipantsData && allEventParticipantsData.length > 0) {
+        const uniqueParticipants = new Set();
+        allEventParticipantsData.forEach(participant => {
+            if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") {
+                uniqueParticipants.add(String(participant.ParticipantNameOverride).trim());
+            } else if (participant.MinisterID && allMinistersData) {
+                const minister = allMinistersData.find(m => String(m.MinisterID).trim() === String(participant.MinisterID).trim());
+                if (minister && minister.Name && String(minister.Name).trim() !== "") {
+                    uniqueParticipants.add(String(minister.Name).trim());
+                }
+            }
+        });
+
+        const sortedParticipants = [...uniqueParticipants].filter(Boolean).sort();
+        sortedParticipants.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            participantFilter.appendChild(option);
+        });
+    }
+
     eventTypeFilter.removeEventListener('change', applyFilters);
     churchFilter.removeEventListener('change', applyFilters);
+    participantFilter.removeEventListener('change', applyFilters); // New filter listener
+
     eventTypeFilter.addEventListener('change', applyFilters);
     churchFilter.addEventListener('change', applyFilters);
+    participantFilter.addEventListener('change', applyFilters); // New filter listener
 }
 
 function applyFilters() {
     const selectedEventType = document.getElementById('eventTypeFilter').value;
     const selectedChurchID = document.getElementById('churchFilter').value;
+    const selectedParticipantName = document.getElementById('participantFilter').value; 
 
     let allProcessedCalendarEvents = processDataForCalendar();
     let filteredForDisplay = allProcessedCalendarEvents;
 
+
     if (selectedEventType) {
         filteredForDisplay = filteredForDisplay.filter(fcEvent =>
             fcEvent.extendedProps && (
-                fcEvent.extendedProps.EventType === selectedEventType ||
-                (fcEvent.extendedProps.IsSeriesParent && fcEvent.extendedProps.originalEventType === selectedEventType)
+                String(fcEvent.extendedProps.EventType).trim() === selectedEventType
             )
         );
     }
+
     if (selectedChurchID) {
-        filteredForDisplay = filteredForDisplay.filter(fcEvent => fcEvent.extendedProps && fcEvent.extendedProps.ChurchID === selectedChurchID);
+        filteredForDisplay = filteredForDisplay.filter(fcEvent => 
+            fcEvent.extendedProps && String(fcEvent.extendedProps.ChurchID).trim() === selectedChurchID
+        );
     }
+
+    if (selectedParticipantName) {
+        filteredForDisplay = filteredForDisplay.filter(fcEvent => {
+            if (!fcEvent.extendedProps || !fcEvent.extendedProps.EventID) {
+                return false; 
+            }
+            const eventID = String(fcEvent.extendedProps.EventID).trim();
+            
+            const participantsInThisEvent = allEventParticipantsData.filter(p => String(p.EventID).trim() === eventID);
+
+            if (participantsInThisEvent.length === 0) {
+                return false; 
+            }
+
+            return participantsInThisEvent.some(participant => {
+
+                if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() === selectedParticipantName) {
+                    return true;
+                }
+                if (participant.MinisterID && allMinistersData) {
+                    const minister = allMinistersData.find(m => String(m.MinisterID).trim() === String(participant.MinisterID).trim());
+                    if (minister && minister.Name && String(minister.Name).trim() === selectedParticipantName) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+        });
+    }
+
     renderCalendar(filteredForDisplay);
 }
 
@@ -189,11 +250,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: 'listWeek',
+        views: {
+        listDay: { buttonText: 'list day' },
+        listWeek: { buttonText: 'list week' },
+        listMonth: { buttonText: 'list month' }
+      },
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            right: 'dayGridMonth,timeGridWeek,listWeek'
+            right: 'listDay,listWeek,listMonth'
         },
         timeZone: 'local',
         events: [],
