@@ -351,10 +351,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         const ministerIDToFind = String(participant.MinisterID).trim();
                         const minister = allMinistersData.find(m => String(m.MinisterID).trim() === ministerIDToFind);
                         if (minister) {
-                            name = minister.Name ? String(minister.Name).trim() : null; // Assuming 'Name' is the correct field
+                            name = minister.Name ? String(minister.Name).trim() : null;
+                            churchName = minister.ChurchName ? String(minister.ChurchName).trim() : null;
                         }
                     }
-                    detailsHtml += `<li>${name || 'N/A'} ${role ? `(${role})` : ''}</li>`;
+                    detailsHtml += `<li>${name || 'N/A'} ${churchName ? `[${churchName}]` : ''} ${role ? `(${role})` : ''}</li>`;
                 });
                 detailsHtml += `</ul>`;
             }
