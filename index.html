@@ -26,6 +26,9 @@
             border-radius: .375rem;
             margin-bottom: 20px; 
         }
+        #filterCollapse { /* Add some padding when it's shown */
+            margin-top: 1rem;
+        }
         #filters .filters-header {
             display: flex;
             justify-content: space-between;
@@ -97,7 +100,35 @@
             #filters .filters-header h2 {
                 font-size: 1.1rem;
             }
+            /* Mobile specific FullCalendar Toolbar Adjustments */
+            .fc-toolbar.fc-header-toolbar {
+                flex-direction: row; /* Stack toolbar sections */
+                align-items: stretch; /* Make sections take full width */
+                gap: 0.5em; /* Add some space between stacked sections */
+            }
+            .fc .fc-toolbar-chunk {
+                display: flex;
+                justify-content: center; /* Center buttons within their chunk */
+                margin-bottom: 0.25em; /* Space between chunks */
+            }
+            .fc .fc-toolbar-title {
+                font-size: 1.1rem; /* Smaller title on mobile */
+                margin-top: 0.25em;
+                margin-bottom: 0.25em;
+                text-align: center; /* Ensure title is centered when stacked */
+            }
+            .fc .fc-button {
+                padding: .2rem .4rem; /* Even smaller padding for mobile buttons */
+                font-size: 0.75rem;   /* Even smaller font for mobile buttons */
+            }
+            .fc .fc-button-group .fc-button { /* Ensure grouped buttons don't have weird margins */
+                margin: 0;
+            }
+            .fc .fc-prev-button, .fc .fc-next-button, .fc .fc-today-button {
+                /* Optionally give prev/next/today more prominence or specific styling if needed */
+            }
         }
+
     </style>
 </head>
 <body>
@@ -123,7 +154,7 @@
                     Show/Hide Filters
                 </button>
             </div>
-            <div class="collapse show" id="filterCollapse"> 
+            <div class="collapse" id="filterCollapse"> 
                 <div class="row g-3 mt-2"> 
                     <div class="col-12 col-md-4 filter-item">
                         <label for="eventTypeFilter" class="form-label">Add Event Type Filter:</label>

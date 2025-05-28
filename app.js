@@ -310,16 +310,16 @@ document.addEventListener('DOMContentLoaded', function() {
     calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'listWeek', 
         views: { 
-            listDay: { buttonText: 'Day' },
-            listWeek: { buttonText: 'Week' },
-            dayGridMonth: { buttonText: 'Grid Month' },
-            listMonth: { buttonText: 'List Month' }, 
-            listYear: { buttonText: 'Year' }      
+          listDay: { buttonText: 'D' },
+            listWeek: { buttonText: 'W' },
+            listMonth: { buttonText: 'M' },
+            listYear: { buttonText: 'Y' },
+            dayGridMonth: { buttonText: 'Grid' } // Changed from listMonth for standard month view  
         },
         headerToolbar: {
             left: 'prev,next today',
             center: 'title',
-            right: 'listDay,listWeek,dayGridMonth,listMonth,listYear'
+            right: 'listDay,listWeek,listMonth,listYear,dayGridMonth' // Matched view names
         },
         timeZone: 'local', 
         events: [], 
