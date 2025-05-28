@@ -70,7 +70,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="servicesModalLabel">Regular Services</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
                 </div>
                 <div class="modal-body" id="servicesModalBody"><p>Loading services...</p></div>
                 <div class="modal-footer">
@@ -85,11 +85,11 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="mapModalLabelLeaflet">Church Locations</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
                 </div>
                 <div class="modal-body">
                     <div id="mapCanvasLeaflet"></div>
-                    <p class="text-muted mt-2"><small>Note: Pin locations are based on addresses provided and geocoding accuracy. Map tiles by OpenStreetMap.</small></p>
+                    <p class="text-muted mt-2"><small>Map tiles by OpenStreetMap. Pin locations based on provided coordinates or geocoded addresses.</small></p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Close Map</button>
@@ -103,19 +103,17 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap4.min.js"></script>
-    
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-     crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <script>
-            const SCRIPT_API_URL = 'https://script.google.com/macros/s/AKfycbz0svFL0DvyXVMc3ebkKaEyFwVSl3zWe1ff0qO5NQ1J66AlO8YSwYERGqxsZbDhR1K75g/exec';
+        const SCRIPT_API_URL = 'https://script.google.com/macros/s/AKfycbz0svFL0DvyXVMc3ebkKaEyFwVSl3zWe1ff0qO5NQ1J66AlO8YSwYERGqxsZbDhR1K75g/exec';
 
         let allChurchesData = [];
         let allMinistersData = [];
         let allServicesData = [];
         let churchesDataTable; 
         let leafletMap; 
+        let leafletMarkers = []; // Keep track of markers to manage them
 
         function displayStatus(message, isError = false, autoClear = true) {
             const statusMsg = document.getElementById("statusMessage");
@@ -133,13 +131,13 @@
                 }, 5000);
             }
         }
-
         async function fetchSheetDataForStaticPage(sheetName) {
             try {
                 const response = await fetch(`${SCRIPT_API_URL}?sheet=${sheetName}`);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} for ${sheetName}`);
                 const result = await response.json();
                 if (result.error) throw new Error(`API error for ${sheetName}: ${result.error}`);
+                // console.log(`Fetched ${sheetName}:`, result.data ? result.data.slice(0,3) : 'No data'); 
                 return result.data || [];
             } catch (error) {
                 console.error(`Error fetching ${sheetName}:`, error);
@@ -147,7 +145,6 @@
                 return []; 
             }
         }
-
         function initializeDataTable(tableId) {
             if ($.fn.DataTable.isDataTable(`#${tableId}`)) {
                  $(`#${tableId}`).DataTable().destroy();
@@ -159,7 +156,6 @@
                 "destroy": true 
             });
         }
-
         function populateChurchesTable() {
             const tbody = document.getElementById("churchesTableBody");
             if (!tbody) { console.error("populateChurchesTable: churchesTableBody element not found!"); return; }
@@ -184,10 +180,11 @@
                     const addressCell = row.insertCell();
                     if (church.Address) { 
                         const encodedAddress = encodeURIComponent(church.Address);
-                        addressCell.innerHTML = `<a href="https://www.google.com/maps/search/?api=1&query=${encodedAddress}" target="_blank">${church.Address}</a>`;
+                        addressCell.innerHTML = `<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`; // Corrected Google Maps link
                     } else { addressCell.textContent = "N/A"; }
+                    
                     const actionsCell = row.insertCell();
-                    const churchNameAttr = church.ChurchName ? church.ChurchName.replace(/"/g, '"') : 'Selected Church';
+                    const churchNameAttr = church.ChurchName ? church.ChurchName.replace(/"/g, '&quot;') : 'Selected Church'; // Sanitize for attribute
                     actionsCell.innerHTML = `<button type="button" class="btn btn-sm btn-info view-services-btn" data-churchid="${church.ChurchID || ''}" data-churchname="${churchNameAttr}">View Services</button>`;
                 });
                 initializeDataTable('churchesInfoTable'); 
@@ -196,7 +193,6 @@
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center">No churches found.</td></tr>';
             }
         }
-
         function attachServiceButtonListeners() {
             $('#churchesInfoTable tbody').off('click', 'button.view-services-btn').on('click', 'button.view-services-btn', function () {
                 const churchId = $(this).data('churchid');
@@ -205,16 +201,13 @@
                 else console.error("View Services button clicked without a churchId.");
             });
         }
-
         function displayServicesInModal(churchId, churchName) {
             const modalTitle = document.getElementById("servicesModalLabel");
             const modalBody = document.getElementById("servicesModalBody");
             if(!modalTitle || !modalBody){ console.error("Services modal elements not found!"); return; }
-
             modalTitle.textContent = `Regular Services for ${churchName}`;
             modalBody.innerHTML = '<p>Loading services...</p>';
             const servicesForChurch = allServicesData.filter(s => s && String(s.ChurchID).trim() === churchId.trim());
-
             if (servicesForChurch.length > 0) {
                 const servicesByDay = {};
                 servicesForChurch.forEach(s => { if (!s.ServiceDay) return; if (!servicesByDay[s.ServiceDay]) servicesByDay[s.ServiceDay] = []; servicesByDay[s.ServiceDay].push(s);});
@@ -232,7 +225,6 @@
             } else { modalBody.innerHTML = "<p>No regular services listed for this church.</p>"; }
             $('#servicesModal').modal('show');
         }
-        
         function parseSimpleTimeForSort(timeStr) { 
             if (!timeStr || typeof timeStr !== 'string') return null;
             const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -245,18 +237,18 @@
             return hours * 60 + minutes; 
         }
 
-        // --- Leaflet Maps Functions ---
         async function geocodeAddressWithNominatim(address) {
             const encodedAddress = encodeURIComponent(address);
+            const headers = new Headers({ 'User-Agent': 'ChurchDenominationMap/1.0 (ChurchApp@gmail.com)' }); // Replace with your info
             const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`;
             try {
-                const response = await fetch(url, { headers: { 'User-Agent': 'ChurchDenominationApp/1.0 YourContactEmail@example.com' } }); // Be a good citizen
+                const response = await fetch(url, { headers: headers });
                 if (!response.ok) throw new Error(`Nominatim HTTP error! Status: ${response.status}`);
                 const data = await response.json();
-                if (data && data.length > 0) {
+                if (data && data.length > 0 && data[0].lat && data[0].lon) { 
                     return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
                 } else {
-                    console.warn(`Address not found by Nominatim: ${address}`);
+                    console.warn(`Address not found or no coordinates from Nominatim: ${address}`);
                     return null; 
                 }
             } catch (error) {
@@ -265,23 +257,61 @@
             }
         }
 
+        function fitMapToMarkers() {
+            if (!leafletMap || leafletMarkers.length === 0) return;
+
+            const featureGroup = L.featureGroup(leafletMarkers);
+            const mapBounds = featureGroup.getBounds();
+
+            if (mapBounds.isValid()) {
+                console.log("Fitting bounds:", mapBounds.toBBoxString());
+                leafletMap.fitBounds(mapBounds.pad(0.1)); // Add some padding
+
+                // If only one marker, or if fitBounds results in a very high zoom (too close), set a specific zoom.
+                if (leafletMarkers.length === 1) {
+                    leafletMap.setZoom(13); // Zoom level for a single marker
+                } else if (leafletMap.getZoom() > 15) { // Don't zoom in too extremely if markers are very close
+                    leafletMap.setZoom(15);
+                }
+                // Optional: If markers are very far apart, fitBounds might zoom out too much.
+                // You could enforce a minimum zoom level, but this might cut off some markers.
+                // else if (leafletMap.getZoom() < 5) {
+                //     leafletMap.setZoom(5);
+                // }
+            } else if (leafletMarkers.length === 1 && leafletMarkers[0].getLatLng()) {
+                // Fallback if bounds somehow invalid but one marker exists
+                leafletMap.setView(leafletMarkers[0].getLatLng(), 13);
+            } else {
+                console.warn("Map bounds invalid or no markers to fit. Map view may not be optimal.");
+            }
+        }
+
+
         async function showMapWithLeafletPins() {
             if (typeof L === 'undefined') {
                 displayStatus("Map library (Leaflet) not ready. Please wait or refresh.", true, false);
                 return;
             }
-
             const mapElement = document.getElementById('mapCanvasLeaflet');
             if (!mapElement) { console.error("mapCanvasLeaflet element not found!"); return; }
             
-            if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+            // Clear previous markers from the map and the array
+            if (leafletMarkers.length > 0) {
+                leafletMarkers.forEach(marker => marker.remove());
+                leafletMarkers = [];
+            }
 
-            let mapCenter = [34.730369, -86.586105]; // Default to Huntsville, AL (lat, lng)
-            leafletMap = L.map(mapElement).setView(mapCenter, 7); 
+            if (!leafletMap) { // Initialize map only once, or re-initialize if needed
+                let mapCenter = [34.730369, -86.586105]; // Default: Huntsville, AL
+                leafletMap = L.map(mapElement).setView(mapCenter, 6); 
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 18,
+                }).addTo(leafletMap);
+            } else {
+                // If map exists, ensure it's cleared of old layers if you're not using featureGroup for everything
+            }
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(leafletMap);
 
             if (!allChurchesData || allChurchesData.length === 0) {
                 displayStatus("No church data to display on map.", true, false);
@@ -290,79 +320,70 @@
                 return;
             }
             
-            let markers = [];
             let geocodePromises = [];
-            let validLocationsCount = 0;
+            // leafletMarkers array is already cleared above
 
             allChurchesData.forEach(church => {
-                if (church && church.Address && String(church.Address).trim() !== "") {
-                    // Prefer Latitude/Longitude if available in your church data
-                    if (church.Latitude && church.Longitude && !isNaN(parseFloat(church.Latitude)) && !isNaN(parseFloat(church.Longitude))) {
-                        const lat = parseFloat(church.Latitude);
-                        const lng = parseFloat(church.Longitude);
-                        const marker = L.marker([lat, lng])
-                            .bindPopup(`<strong>${church.ChurchName || "Church"}</strong><br>${church.Address || ''}`);
-                        markers.push(marker);
-                        validLocationsCount++;
-                    } else { 
-                        geocodePromises.push(
-                            geocodeAddressWithNominatim(church.Address).then(coords => {
-                                if (coords) {
-                                    const marker = L.marker([coords.lat, coords.lng])
-                                        .bindPopup(`<strong>${church.ChurchName || "Church"}</strong><br>${church.Address || ''}`);
-                                    markers.push(marker); // Add to array for layer group
-                                    validLocationsCount++;
-                                }
-                            }).catch(err => { /* Individual geocode error already logged */ })
-                        );
-                    }
+                if (!church) return;
+                const churchName = church.ChurchName || "Church";
+                const churchAddress = church.Address || "";
+                const popupContent = `<strong>${churchName}</strong><br>${churchAddress}`;
+
+                if (church.Latitude && church.Longitude && 
+                    !isNaN(parseFloat(church.Latitude)) && !isNaN(parseFloat(church.Longitude))) {
+                    
+                    const lng = parseFloat(church.Latitude);
+                    const lat = parseFloat(church.Longitude);
+                    // console.log(`Using direct Lat/Lng for ${churchName}: Lat: ${lat}, Lng: ${lng}`);
+                    const marker = L.marker([lat, lng]).bindPopup(popupContent);
+                    leafletMarkers.push(marker); // Add to global array for later use by fitMapToMarkers
+                } else if (churchAddress && String(churchAddress).trim() !== "") { 
+                    geocodePromises.push(
+                        geocodeAddressWithNominatim(churchAddress).then(coords => {
+                            if (coords && !isNaN(coords.lat) && !isNaN(coords.lng)) { 
+                                // console.log(`Geocoded ${churchName} (${churchAddress}): [${coords.lat}, ${coords.lng}]`);
+                                const marker = L.marker([coords.lat, coords.lng]).bindPopup(popupContent); 
+                                leafletMarkers.push(marker);
+                            } else {
+                                // console.log(`Geocoding returned null for ${churchName} (${churchAddress})`);
+                            }
+                        })
+                    );
                 }
             });
 
-            if (validLocationsCount > 0 && geocodePromises.length === 0) { // All locations had lat/lng
-                 if (markers.length > 0) {
-                    const featureGroup = L.featureGroup(markers).addTo(leafletMap);
-                    leafletMap.fitBounds(featureGroup.getBounds().pad(0.1));
-                    if (markers.length === 1 && leafletMap.getBoundsZoom(featureGroup.getBounds()) > 12) leafletMap.setZoom(12);
-                 }
-                 displayStatus(`Map loaded with ${markers.length} churches.`, false, true);
-            } else if (geocodePromises.length > 0) {
-                displayStatus("Geocoding addresses for map... please wait.", false, false);
-                Promise.allSettled(geocodePromises)
-                    .then(() => {
-                        if (markers.length > 0) {
-                            const featureGroup = L.featureGroup(markers).addTo(leafletMap); // Add markers to map
-                            leafletMap.fitBounds(featureGroup.getBounds().pad(0.1));
-                            if (markers.length === 1 && leafletMap.getBoundsZoom(featureGroup.getBounds()) > 12) leafletMap.setZoom(12);
-                            displayStatus(`Map loaded with ${markers.length} churches. Some addresses may require geocoding.`, false, true);
-                        } else {
-                            mapElement.innerHTML = "<p class='text-center p-5'>Could not display church locations. Addresses might be missing or un-geocodeable.</p>";
-                            displayStatus("No locations could be mapped.", true, false);
-                        }
-                    });
-            } else if (validLocationsCount === 0) { // No addresses, no lat/lng
-                 mapElement.innerHTML = "<p class='text-center p-5'>No valid church locations with addresses or coordinates to display.</p>";
-                 displayStatus("No church locations with addresses to display.", true, false);
+            function displayAndFitMap() {
+                if (leafletMarkers.length > 0) {
+                    leafletMarkers.forEach(marker => marker.addTo(leafletMap));
+                    fitMapToMarkers(); // Use the new helper function
+                } else {
+                    mapElement.innerHTML = "<p class='text-center p-5'>No valid church locations could be mapped.</p>";
+                    displayStatus("No locations could be mapped.", true, false);
+                     // Optionally reset to default view if no markers
+                    leafletMap.setView([34.730369, -86.586105], 6);
+                }
+                leafletMap.invalidateSize(); // Call after markers are added AND modal is visible
             }
 
+            $('#mapModalLeaflet').modal('show'); // Show modal first
 
-            $('#mapModalLeaflet').modal('show');
-            $('#mapModalLeaflet').on('shown.bs.modal', function () {
-                if (leafletMap) {
-                    leafletMap.invalidateSize();
-                     if (markers.length > 0) {
-                        const featureGroup = L.featureGroup(markers);
-                        if (Object.keys(featureGroup.getBounds()).length > 0) {
-                           leafletMap.fitBounds(featureGroup.getBounds().pad(0.1));
-                            if (markers.length === 1 && leafletMap.getBoundsZoom(featureGroup.getBounds()) > 12) leafletMap.setZoom(12);
-                        }
-                    }
+            // Handle map rendering after modal is fully shown and geocoding (if any) is done
+            $('#mapModalLeaflet').off('shown.bs.modal').on('shown.bs.modal', function () { 
+                if (leafletMap) leafletMap.invalidateSize(); // Invalidate size immediately when modal is shown
+
+                if (geocodePromises.length > 0) {
+                    displayStatus("Geocoding addresses... this may take a moment.", false, false);
+                    Promise.allSettled(geocodePromises)
+                        .then(() => {
+                            displayAndFitMap();
+                        });
+                } else {
+                    displayAndFitMap(); // No geocoding, just display and fit
                 }
             });
         }
 
-        //document.getElementById("showChurchesMapBtnLeaflet").addEventListener("click", showMapWithLeafletPins);
-
+        document.getElementById("showChurchesMapBtnLeaflet").addEventListener("click", showMapWithLeafletPins);
         async function loadInitialData() {
             displayStatus("Loading data...", false, false); 
             try {
@@ -387,7 +408,7 @@
         window.onload = function() {
             if(typeof $ !== 'undefined' && $.fn.DataTable && typeof L !== 'undefined') {
                 loadInitialData();
-            } else {
+            } else { 
                 let missing = [];
                 if(typeof $ === 'undefined') missing.push("jQuery");
                 if(typeof $.fn.DataTable === 'undefined') missing.push("DataTables");
