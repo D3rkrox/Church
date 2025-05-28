@@ -7,10 +7,16 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" xintegrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/main.min.css' rel='stylesheet' />
     <style>
+        html, body {
+            height: 100%; /* Allow children to use percentage heights effectively */
+            margin: 0; /* Reset default margin */
+        }
         body { 
             font-family: Arial, sans-serif; 
             padding-top: 15px;
             padding-bottom: 15px;
+            display: flex; /* Use flexbox for overall page structure */
+            flex-direction: column;
         }
         .container { 
             max-width: 1140px; 
@@ -33,7 +39,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            /*margin-bottom: 1rem;*/
         }
         #filters .filters-header h2 {
             font-size: 1.25rem; 
@@ -88,6 +94,18 @@
         }
 
         @media (max-width: 767.98px) { 
+            body {
+                padding-top: 10px; /* Slightly less padding on mobile */
+                padding-bottom: 10px;
+            }
+            .container {
+                flex-grow: 1; /* Allow container to fill body height */
+                display: flex;
+                flex-direction: column;
+                height: 100%; /* Occupy full height of flex parent (body) */
+                max-height: 100vh; /* Ensure it doesn't exceed viewport due to body padding */
+                box-sizing: border-box;
+            }
             header h1 {
                 font-size: 1.5rem; 
             }
@@ -99,6 +117,24 @@
             }
             #filters .filters-header h2 {
                 font-size: 1.1rem;
+            }
+            .submit-event-link-container {
+                margin-bottom: 15px;
+            }
+            #filters {
+                margin-bottom: 15px;
+            }
+            main { /* Parent of #calendar */
+                flex-grow: 1; /* Main section will take up remaining vertical space */
+                display: flex;
+                flex-direction: column;
+                min-height: 250px; /* Ensure calendar has some minimum space */
+            }
+            #calendar {
+                flex-grow: 1; /* Calendar div itself grows to fill main */
+                /* FullCalendar's JS will use this height.
+                   You might need to set `height: '100%'` in FullCalendar's options
+                   if it doesn't fill automatically. */
             }
             /* Mobile specific FullCalendar Toolbar Adjustments */
             .fc-toolbar.fc-header-toolbar {
