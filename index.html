@@ -11,6 +11,7 @@
         .container { max-width: 1140px; }
         #filters { padding: 15px; background-color: #f8f9fa; border-radius: 5px; margin-bottom: 20px; }
         #loading-indicator { text-align: center; padding: 20px; font-size: 1.2em; }
+        .submit-event-link-container { text-align: center; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -18,7 +19,14 @@
         <header class="my-4 text-center">
             <h1>Church Events</h1>
         </header>
-
+<!--
+        <div class="submit-event-link-container">
+            <a href="https://script.google.com/macros/s/AKfycbwpQPxHSNCpgZ5G20ksEI5dXOUdrsjca5uNyZ556Ag7rLz-QC5hj5FBGNYxZhUVyGcpXg/exec" class="btn btn-primary btn-lg" target="_blank">
+                Submit a New Event
+            </a>
+            <p class="mt-2"><small>Note: Submitted events will be reviewed before appearing on the calendar.</small></p>
+        </div>
+    -->
         <div id="loading-indicator" style="display: none;">Loading events... please wait.</div>
         <div id="error-container" class="alert alert-danger" style="display: none;"></div>
 
