@@ -204,25 +204,81 @@
         function displayServicesInModal(churchId, churchName) {
             const modalTitle = document.getElementById("servicesModalLabel");
             const modalBody = document.getElementById("servicesModalBody");
+
             if(!modalTitle || !modalBody){ console.error("Services modal elements not found!"); return; }
-            modalTitle.textContent = `Regular Services for ${churchName}`;
-            modalBody.innerHTML = '<p>Loading services...</p>';
-            const servicesForChurch = allServicesData.filter(s => s && String(s.ChurchID).trim() === churchId.trim());
+
+            modalTitle.textContent = `Services for ${churchName}`;
+            modalBody.innerHTML = '<p>Loading services...</p>'; // Reset body
+
+            const servicesForChurch = allServicesData.filter(
+                service => service && String(service.ChurchID).trim() === churchId.trim()
+            );
+
+            let regularServicesHtml = "<h6>Weekly Services</h6>";
+            let specialServicesHtml = "<h6>Regular Weekend & Communion  Service</h6>";
+            let hasRegular = false;
+            let hasSpecial = false;
+
+            const regularServicesByDay = {};
+            const specialServiceEntries = [];
+
             if (servicesForChurch.length > 0) {
-                const servicesByDay = {};
-                servicesForChurch.forEach(s => { if (!s.ServiceDay) return; if (!servicesByDay[s.ServiceDay]) servicesByDay[s.ServiceDay] = []; servicesByDay[s.ServiceDay].push(s);});
-                let servicesHtml = "";
-                const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                dayOrder.forEach(dayKey => {
-                    if (servicesByDay[dayKey] && servicesByDay[dayKey].length > 0) {
-                        servicesHtml += `<h5>${dayKey}</h5><ul>`;
-                        servicesByDay[dayKey].sort((a,b) => (parseSimpleTimeForSort(a.ServiceTime)||0) - (parseSimpleTimeForSort(b.ServiceTime)||0))
-                            .forEach(s => { servicesHtml += `<li><strong>${s.ServiceTime||'N/A'}:</strong> ${s.ServiceType||'N/A'}</li>`; });
-                        servicesHtml += "</ul>";
+                servicesForChurch.forEach(s => {
+                    if (!s) return;
+                    if (String(s.ServiceDay).toLowerCase() === "special") {
+                        specialServiceEntries.push(s);
+                        hasSpecial = true;
+                    } else if (s.ServiceDay) { // Regular day
+                        if (!regularServicesByDay[s.ServiceDay]) regularServicesByDay[s.ServiceDay] = [];
+                        regularServicesByDay[s.ServiceDay].push(s);
+                        hasRegular = true;
                     }
                 });
-                modalBody.innerHTML = servicesHtml || "<p>No regular services listed for this church.</p>";
-            } else { modalBody.innerHTML = "<p>No regular services listed for this church.</p>"; }
+
+                if (hasRegular) {
+                    const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                    let tempRegularHtml = "";
+                    dayOrder.forEach(dayKey => {
+                        if (regularServicesByDay[dayKey] && regularServicesByDay[dayKey].length > 0) {
+                            tempRegularHtml += `<h5>${dayKey}</h5><ul>`;
+                            regularServicesByDay[dayKey].sort((a,b) => (parseSimpleTimeForSort(a.ServiceTime)||0) - (parseSimpleTimeForSort(b.ServiceTime)||0))
+                                .forEach(service => { 
+                                    tempRegularHtml += `<li class="service-detail"><strong>${service.ServiceTime||'N/A'}:</strong> ${service.ServiceType||'N/A'}</li>`; 
+                                });
+                            tempRegularHtml += "</ul>";
+                        }
+                    });
+                    if (tempRegularHtml === "") tempRegularHtml = "<p>No regular weekly services listed.</p>";
+                    regularServicesHtml += tempRegularHtml;
+                } else {
+                    regularServicesHtml += "<p>No regular weekly services listed.</p>";
+                }
+
+                if (hasSpecial) {
+                    let tempSpecialHtml = "<ul>";
+                    // Optionally sort special services, e.g., by rule or type
+                    specialServiceEntries.sort((a,b) => (a.RegularMeetingRule || "").localeCompare(b.RegularMeetingRule || "") || (parseSimpleTimeForSort(a.ServiceTime)||0) - (parseSimpleTimeForSort(b.ServiceTime)||0) )
+                        .forEach(service => {
+                        tempSpecialHtml += `<li class="service-detail">`;
+                            if (service.RegularMeetingRule) {
+                                tempSpecialHtml += `<strong>${service.ServiceType || 'Special Service'} on ${service.RegularMeetingRule || 'N/A'}</strong>`;
+                            }
+                            if(service.CommunionNight) {
+                                tempSpecialHtml += `<strong>${service.ServiceType || 'Special Service'} on ${service.CommunionNight || 'N/A'}</strong>`;
+                            }
+                        tempSpecialHtml += `</li>`;
+                    });
+                    tempSpecialHtml += "</ul>";
+                    specialServicesHtml += tempSpecialHtml;
+                } else {
+                    specialServicesHtml += "<p>No special monthly or other services listed.</p>";
+                }
+
+                modalBody.innerHTML = regularServicesHtml + "<hr>" + specialServicesHtml;
+
+            } else {
+                modalBody.innerHTML = "<p>No services listed for this church.</p>";
+            }
             $('#servicesModal').modal('show');
         }
         function parseSimpleTimeForSort(timeStr) { 
