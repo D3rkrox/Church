@@ -11,9 +11,8 @@ let allServiceSchedulePatterns = [];
 
 let calendar;
 var eventDetailModalInstance;
-var filterCollapseInstance; // To store the Bootstrap Collapse instance
+var filterCollapseInstance; 
 
-// --- State for Active Filters ---
 let activeFilters = {
     eventType: new Set(),
     church: new Set(),
@@ -149,15 +148,9 @@ async function initializeApp() {
 function renderCalendar(eventsToDisplay) {
     if (calendar) {
         calendar.removeAllEvents();
-        if (Array.isArray(eventsToDisplay)) {
-            calendar.addEventSource(eventsToDisplay);
-        } else {
-            console.error("renderCalendar: eventsToDisplay is not an array", eventsToDisplay);
-            calendar.addEventSource([]); 
-        }
-    } else {
-        console.error("Calendar instance not found for renderCalendar.");
-    }
+        if (Array.isArray(eventsToDisplay)) calendar.addEventSource(eventsToDisplay);
+        else { console.error("renderCalendar: eventsToDisplay not an array"); calendar.addEventSource([]); }
+    } else { console.error("Calendar instance not found for renderCalendar."); }
 }
 
 function showFilterCollapse() {
@@ -221,19 +214,12 @@ function updateParticipantOptions() {
     const activeEventTypeFilters = [...activeFilters.eventType];
     let filterMode = "all";
 
-    // If multiple event types are selected, default to "all" participants.
-    // Only apply specific participant filtering if *exactly one* relevant event type is selected.
-    if (activeEventTypeFilters.length === 1) {
-        if (activeEventTypeFilters[0].toLowerCase() === "singing") filterMode = "singing";
-        else if (activeEventTypeFilters[0].toLowerCase() === "revival" || activeEventTypeFilters[0].toLowerCase() === "revival meeting") filterMode = "revival";
-    } else if (activeEventTypeFilters.length > 1) {
-        // If multiple event types are selected, determine if we should show "all", "singing", or "revival"
-        // For now, let's default to "all" if multiple types are selected, unless specific logic is desired.
-        const hasSinging = activeEventTypeFilters.some(type => type.toLowerCase() === "singing");
-        const hasRevival = activeEventTypeFilters.some(type => type.toLowerCase() === "revival" || type.toLowerCase() === "revival meeting");
-        if (hasSinging && !hasRevival) filterMode = "singing"; // Only singing types selected
-        else if (hasRevival && !hasSinging) filterMode = "revival"; // Only revival types selected
-        // If both singing and revival types are selected, or other combinations, defaults to "all"
+    if (activeEventTypeFilters.length > 0) { 
+        if (activeEventTypeFilters.some(type => type.toLowerCase() === "singing")) {
+            filterMode = "singing";
+        } else if (activeEventTypeFilters.some(type => type.toLowerCase() === "revival" || type.toLowerCase() === "revival meeting")) {
+            filterMode = "revival";
+        }
     }
     
     if (filterMode === "singing") {
@@ -253,7 +239,7 @@ function updateParticipantOptions() {
                 if (minister && minister.Name) uniqueParticipants.add(String(minister.Name).trim());
             });
         }
-    } else { // "all" mode
+    } else { 
         if (allEventParticipantsData && allEventParticipantsData.length > 0) {
             allEventParticipantsData.forEach(participant => {
                 if(!participant) return;
@@ -328,39 +314,28 @@ function populateFilterDropdowns() {
 
 function handleAddFilter(category, value) { 
     if (!value || value === "") { 
-        // If user re-selects the default "-- Select --" option,
-        // we don't clear the filter for that category. They must use the 'x' on the tag.
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown
+        if (filterDropdown) filterDropdown.selectedIndex = 0; 
         return; 
     }
-
     const storeValue = value; 
     let changed = false;
-
-    // If this filter is already active for this category, do nothing.
     if (activeFilters[category].has(storeValue)) {
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown
+        if (filterDropdown) filterDropdown.selectedIndex = 0;
         return; 
     }
-    
-    // Add the new filter. Does NOT clear existing filters in the same category.
     activeFilters[category].add(storeValue);
     changed = true;
-    
     if (changed) {
         if (category === 'eventType') {
-            // When event type changes, existing participant filter might become invalid or options change
-            // updateParticipantOptions will handle clearing invalid participant tags
             updateParticipantOptions(); 
         }
         renderActiveFilterTags();
         applyFilters();
     }
-
     const filterDropdown = document.getElementById(category + 'Filter');
-    if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown after selection
+    if (filterDropdown) filterDropdown.selectedIndex = 0;
 }
 
 function handleRemoveFilter(category, value) {
@@ -381,10 +356,8 @@ function handleParticipantFilterChange(e) { if(e.target) handleAddFilter('partic
 function applyFilters() {
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
-
     setTimeout(() => {
         let eventsToDisplay = processDataForCalendar(); 
-        
         if (activeFilters.eventType.size > 0) {
             eventsToDisplay = eventsToDisplay.filter(fcEvent =>
                 fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => 
@@ -405,7 +378,6 @@ function applyFilters() {
                 const originalEventID = String(fcEvent.extendedProps.EventID).trim(); 
                 const participantsInThisEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === originalEventID);
                 if (participantsInThisEvent.length === 0) return false;
-                
                 return participantsInThisEvent.some(participant => {
                     if(!participant) return false;
                     let nameToCheck = null;
@@ -422,7 +394,6 @@ function applyFilters() {
                 });
             });
         }
-
         renderCalendar(eventsToDisplay);
         if (loadingIndicator) loadingIndicator.style.display = 'none';
     }, 10);
@@ -450,7 +421,7 @@ document.addEventListener('DOMContentLoaded', function() {
             listWeek: { buttonText: 'W' },
             listMonth: { buttonText: 'M' },
             listYear: { buttonText: 'Y' },
-            dayGridMonth: { buttonText: 'Grid' } // Changed from listMonth for standard month view  
+            dayGridMonth: { buttonText: 'Grid' } // Changed from listMonth for standard month view   
         },
         headerToolbar: {
             left: 'prev,next today', center: 'title',
@@ -462,6 +433,20 @@ document.addEventListener('DOMContentLoaded', function() {
         loading: function(isLoading) {
             const loadingEl = document.getElementById('loading-indicator');
             if (loadingEl) loadingEl.style.display = isLoading ? 'block' : 'none';
+        },
+        datesSet: function(viewInfo) { // Use datesSet or viewDidMount
+            const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
+            if (expandSeriesCheckbox && viewInfo.view.type === 'listDay') {
+                if (!expandSeriesCheckbox.checked) { // Only if not already checked
+                    expandSeriesCheckbox.checked = true;
+                    applyFilters(); // Re-apply filters to show expanded series
+                }
+            }
+            //  Optional: If you want to uncheck it when leaving listDay:
+             else if (expandSeriesCheckbox && expandSeriesCheckbox.checked && viewInfo.view.type === 'listDay') {
+                 expandSeriesCheckbox.checked = false;
+                 applyFilters();
+             }
         },
         eventClick: function(info) {
             if (!eventDetailModalInstance) {
