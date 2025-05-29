@@ -11,7 +11,9 @@ let allServiceSchedulePatterns = [];
 
 let calendar;
 var eventDetailModalInstance;
+var filterCollapseInstance; // To store the Bootstrap Collapse instance
 
+// --- State for Active Filters ---
 let activeFilters = {
     eventType: new Set(),
     church: new Set(),
@@ -37,28 +39,70 @@ async function fetchData(sheetName) {
 function processDataForCalendar() {
     let processedEvents = [];
     const defaultFallbackTimeZone = 'America/Chicago';
+    const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
+    const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false; 
 
     allEventsData.forEach(event => {
-        if (!event || !event.EventTitle || !event.StartDate) return;
-
-        let fcStart = event.StartDate;
-        let fcEnd = event.EndDate;
-        const isAllDay = event.IsAllDay === true || String(event.IsAllDay).toUpperCase() === "TRUE";
-        const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
-
-        if (isAllDay) {
-            if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
-            if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
+        if (!event || !event.EventTitle || !event.StartDate) {
+            return;
         }
-        
-        processedEvents.push({
-            title: event.EventTitle,
-            start: fcStart,
-            end: fcEnd,
-            allDay: isAllDay,
-            timeZone: eventTimeZoneForFC,
-            extendedProps: { ...event }
-        });
+
+        const isSeriesParent = event.IsSeriesParent === true || String(event.IsSeriesParent).toUpperCase() === "TRUE";
+        const isGeneratedInstance = event.isGeneratedInstance === true; 
+
+        if (isSeriesParent) {
+            if (!showExpandedSeries) {
+                let parentEventForCalendar = {
+                    title: `${event.EventTitle} (${event.EventType} Series)`, 
+                    start: event.StartDate, 
+                    end: event.StartDate, 
+                    allDay: true, 
+                    timeZone: event.eventActualTimeZone || defaultFallbackTimeZone,
+                    extendedProps: { ...event, isPlaceholder: true } 
+                };
+                processedEvents.push(parentEventForCalendar);
+            }
+        } else if (isGeneratedInstance) {
+            if (showExpandedSeries) {
+                let fcStart = event.StartDate;
+                let fcEnd = event.EndDate;
+                const isAllDay = event.IsAllDay === true || String(event.IsAllDay).toUpperCase() === "TRUE";
+                const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
+
+                if (isAllDay) { 
+                    if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
+                    if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
+                }
+                
+                processedEvents.push({
+                    title: event.EventTitle, 
+                    start: fcStart,
+                    end: fcEnd,
+                    allDay: isAllDay,
+                    timeZone: eventTimeZoneForFC,
+                    extendedProps: { ...event }
+                });
+            }
+        } else {
+            let fcStart = event.StartDate;
+            let fcEnd = event.EndDate;
+            const isAllDay = event.IsAllDay === true || String(event.IsAllDay).toUpperCase() === "TRUE";
+            const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
+
+            if (isAllDay) {
+                if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
+                if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
+            }
+            
+            processedEvents.push({
+                title: event.EventTitle,
+                start: fcStart,
+                end: fcEnd,
+                allDay: isAllDay,
+                timeZone: eventTimeZoneForFC,
+                extendedProps: { ...event }
+            });
+        }
     });
     return processedEvents;
 }
@@ -83,6 +127,10 @@ async function initializeApp() {
         allGroupsData = guestParticipants || []; 
         allServiceSchedulePatterns = servicePatterns || []; 
 
+        if (allEventsData.length === 0 && allChurchesData.length === 0) {
+            console.warn("Initial data fetch returned empty for critical data (Events/Churches).");
+        }
+
         populateFilterDropdowns();
         applyFilters(); 
 
@@ -101,9 +149,26 @@ async function initializeApp() {
 function renderCalendar(eventsToDisplay) {
     if (calendar) {
         calendar.removeAllEvents();
-        if (Array.isArray(eventsToDisplay)) calendar.addEventSource(eventsToDisplay);
-        else { console.error("renderCalendar: eventsToDisplay not an array"); calendar.addEventSource([]); }
-    } else { console.error("Calendar instance not found for renderCalendar."); }
+        if (Array.isArray(eventsToDisplay)) {
+            calendar.addEventSource(eventsToDisplay);
+        } else {
+            console.error("renderCalendar: eventsToDisplay is not an array", eventsToDisplay);
+            calendar.addEventSource([]); 
+        }
+    } else {
+        console.error("Calendar instance not found for renderCalendar.");
+    }
+}
+
+function showFilterCollapse() {
+    if (filterCollapseInstance) {
+        filterCollapseInstance.show();
+    } else if (document.getElementById('filterCollapse') && typeof bootstrap !== 'undefined') {
+        filterCollapseInstance = new bootstrap.Collapse(document.getElementById('filterCollapse'), {
+            toggle: false 
+        });
+        filterCollapseInstance.show();
+    }
 }
 
 function renderActiveFilterTags() {
@@ -140,6 +205,9 @@ function renderActiveFilterTags() {
         });
     });
     container.style.display = hasActiveFilters ? 'block' : 'none';
+    if (hasActiveFilters) { 
+        showFilterCollapse();
+    }
 }
 
 function updateParticipantOptions() {
@@ -153,9 +221,19 @@ function updateParticipantOptions() {
     const activeEventTypeFilters = [...activeFilters.eventType];
     let filterMode = "all";
 
+    // If multiple event types are selected, default to "all" participants.
+    // Only apply specific participant filtering if *exactly one* relevant event type is selected.
     if (activeEventTypeFilters.length === 1) {
         if (activeEventTypeFilters[0].toLowerCase() === "singing") filterMode = "singing";
         else if (activeEventTypeFilters[0].toLowerCase() === "revival" || activeEventTypeFilters[0].toLowerCase() === "revival meeting") filterMode = "revival";
+    } else if (activeEventTypeFilters.length > 1) {
+        // If multiple event types are selected, determine if we should show "all", "singing", or "revival"
+        // For now, let's default to "all" if multiple types are selected, unless specific logic is desired.
+        const hasSinging = activeEventTypeFilters.some(type => type.toLowerCase() === "singing");
+        const hasRevival = activeEventTypeFilters.some(type => type.toLowerCase() === "revival" || type.toLowerCase() === "revival meeting");
+        if (hasSinging && !hasRevival) filterMode = "singing"; // Only singing types selected
+        else if (hasRevival && !hasSinging) filterMode = "revival"; // Only revival types selected
+        // If both singing and revival types are selected, or other combinations, defaults to "all"
     }
     
     if (filterMode === "singing") {
@@ -175,7 +253,7 @@ function updateParticipantOptions() {
                 if (minister && minister.Name) uniqueParticipants.add(String(minister.Name).trim());
             });
         }
-    } else { 
+    } else { // "all" mode
         if (allEventParticipantsData && allEventParticipantsData.length > 0) {
             allEventParticipantsData.forEach(participant => {
                 if(!participant) return;
@@ -205,14 +283,15 @@ function updateParticipantOptions() {
     if (participantFilterChanged) {
         renderActiveFilterTags(); 
     }
-    participantFilterEl.selectedIndex = 0; 
 }
 
 
 function populateFilterDropdowns() {
     const eventTypeFilterEl = document.getElementById('eventTypeFilter');
     const churchFilterEl = document.getElementById('churchFilter');
-    
+    const participantFilterEl = document.getElementById('participantFilter'); 
+    const expandSeriesFilterEl = document.getElementById('expandSeriesFilter'); 
+
     if (eventTypeFilterEl) {
         eventTypeFilterEl.innerHTML = '<option value="">-- Select Type --</option>';
         if (allEventsData && allEventsData.length > 0) {
@@ -236,43 +315,61 @@ function populateFilterDropdowns() {
     }
     
     updateParticipantOptions(); 
-    const participantFilterEl = document.getElementById('participantFilter');
     if (participantFilterEl) {
         participantFilterEl.removeEventListener('change', handleParticipantFilterChange);
         participantFilterEl.addEventListener('change', handleParticipantFilterChange);
+    }
+
+    if (expandSeriesFilterEl) {
+        expandSeriesFilterEl.removeEventListener('change', applyFilters); 
+        expandSeriesFilterEl.addEventListener('change', applyFilters);
     }
 }
 
 function handleAddFilter(category, value) { 
     if (!value || value === "") { 
+        // If user re-selects the default "-- Select --" option,
+        // we don't clear the filter for that category. They must use the 'x' on the tag.
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0; 
+        if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown
         return; 
     }
+
     const storeValue = value; 
     let changed = false;
-    if (!activeFilters[category].has(storeValue)) {
-        activeFilters[category].add(storeValue);
-        changed = true;
-    } else { 
+
+    // If this filter is already active for this category, do nothing.
+    if (activeFilters[category].has(storeValue)) {
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0;
-        return;
+        if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown
+        return; 
     }
+    
+    // Add the new filter. Does NOT clear existing filters in the same category.
+    activeFilters[category].add(storeValue);
+    changed = true;
+    
     if (changed) {
-        if (category === 'eventType') updateParticipantOptions(); 
+        if (category === 'eventType') {
+            // When event type changes, existing participant filter might become invalid or options change
+            // updateParticipantOptions will handle clearing invalid participant tags
+            updateParticipantOptions(); 
+        }
         renderActiveFilterTags();
         applyFilters();
     }
+
     const filterDropdown = document.getElementById(category + 'Filter');
-    if (filterDropdown) filterDropdown.selectedIndex = 0;
+    if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown after selection
 }
 
 function handleRemoveFilter(category, value) {
     if (activeFilters[category] && activeFilters[category].has(value)) { 
         activeFilters[category].delete(value);
-        renderActiveFilterTags();
-        if (category === 'eventType') updateParticipantOptions(); 
+        renderActiveFilterTags(); 
+        if (category === 'eventType') {
+            updateParticipantOptions(); 
+        }
         applyFilters();
     }
 }
@@ -284,25 +381,31 @@ function handleParticipantFilterChange(e) { if(e.target) handleAddFilter('partic
 function applyFilters() {
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
+
     setTimeout(() => {
-        let baseCalendarEvents = processDataForCalendar(); 
-        let filteredForDisplay = baseCalendarEvents;
+        let eventsToDisplay = processDataForCalendar(); 
+        
         if (activeFilters.eventType.size > 0) {
-            filteredForDisplay = filteredForDisplay.filter(fcEvent =>
-                fcEvent.extendedProps && activeFilters.eventType.has(String(fcEvent.extendedProps.EventType || "").trim())
+            eventsToDisplay = eventsToDisplay.filter(fcEvent =>
+                fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => 
+                    String(fcEvent.extendedProps.EventType || "").trim() === typeFilter
+                )
             );
         }
         if (activeFilters.church.size > 0) {
-            filteredForDisplay = filteredForDisplay.filter(fcEvent => 
-                fcEvent.extendedProps && activeFilters.church.has(String(fcEvent.extendedProps.ChurchID || "").trim())
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => 
+                fcEvent.extendedProps && [...activeFilters.church].some(churchFilter =>
+                    String(fcEvent.extendedProps.ChurchID || "").trim() === churchFilter
+                )
             );
         }
         if (activeFilters.participant.size > 0) {
-            filteredForDisplay = filteredForDisplay.filter(fcEvent => {
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => {
                 if (!fcEvent.extendedProps || !fcEvent.extendedProps.EventID) return false;
-                const eventID = String(fcEvent.extendedProps.EventID).trim();
-                const participantsInThisEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === eventID);
+                const originalEventID = String(fcEvent.extendedProps.EventID).trim(); 
+                const participantsInThisEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === originalEventID);
                 if (participantsInThisEvent.length === 0) return false;
+                
                 return participantsInThisEvent.some(participant => {
                     if(!participant) return false;
                     let nameToCheck = null;
@@ -319,7 +422,8 @@ function applyFilters() {
                 });
             });
         }
-        renderCalendar(filteredForDisplay);
+
+        renderCalendar(eventsToDisplay);
         if (loadingIndicator) loadingIndicator.style.display = 'none';
     }, 10);
 }
@@ -329,6 +433,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!calendarEl) { console.error("Calendar #calendar not found!"); return; }
     if (typeof FullCalendar === 'undefined') { console.error("FullCalendar library not loaded!"); return; }
     
+    const filterCollapseElement = document.getElementById('filterCollapse');
+    if (filterCollapseElement && typeof bootstrap !== 'undefined') {
+        filterCollapseInstance = new bootstrap.Collapse(filterCollapseElement, { toggle: false });
+    } else if (!filterCollapseElement) { console.warn("#filterCollapse element not found.") }
+
     if (typeof bootstrap !== 'undefined' && document.getElementById('eventDetailModal')) {
         try { eventDetailModalInstance = new bootstrap.Modal(document.getElementById('eventDetailModal')); }
         catch (e) { console.error("Error initializing Bootstrap modal:", e); }
