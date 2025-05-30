@@ -7,6 +7,7 @@ let allChurchesData = [];
 let allMinistersData = [];
 let allEventParticipantsData = [];
 let allGroupsData = []; 
+let allGroupMembersData = [];
 let allServiceSchedulePatterns = []; 
 
 let calendar;
@@ -41,58 +42,72 @@ function processDataForCalendar() {
     const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
     const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false; 
 
-    allEventsData.forEach(event => {
+    console.log(`--- processDataForCalendar ---`);
+    console.log(`Show Expanded Series (Checkbox state): ${showExpandedSeries}`);
+    console.log(`Total items in allEventsData to process: ${allEventsData.length}`);
+
+    allEventsData.forEach((event, index) => {
         if (!event || !event.EventTitle || !event.StartDate) {
+            // console.warn(`Event index ${index}: Skipping due to missing Title or StartDate`, event);
             return;
         }
 
-        const isSeriesParent = event.IsSeriesParent === true || String(event.IsSeriesParent).toUpperCase() === "TRUE";
-        const isGeneratedInstance = event.isGeneratedInstance === true; 
+        // Robustly check boolean flags
+        const isSeriesParentEvent = String(event.IsSeriesParent).toLowerCase() === "true";
+        const isGeneratedInstance = String(event.isGeneratedInstance).toLowerCase() === "true";
 
-        if (isSeriesParent) {
-            if (!showExpandedSeries) {
-                let parentEventForCalendar = {
-                    title: `${event.EventTitle} (${event.EventType} Series)`, 
-                    start: event.StartDate, 
-                    end: event.StartDate, 
+        // Detailed log for each event before decision making
+        console.log(`Processing Event [${index}]: "${event.EventTitle}" -- IsSeriesParent_Raw: ${event.IsSeriesParent}, IsSeriesParent_Parsed: ${isSeriesParentEvent}, isGeneratedInstance_Raw: ${event.isGeneratedInstance}, isGeneratedInstance_Parsed: ${isGeneratedInstance}`);
+
+        let fcStart = event.StartDate;
+        let fcEnd = event.EndDate;
+        const isAllDay = String(event.IsAllDay).toLowerCase() === "true"; 
+        const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
+
+        if (isSeriesParentEvent) {
+            if (!showExpandedSeries) { 
+                console.log(`  Action: Adding PARENT placeholder for "${event.EventTitle}"`);
+                let placeholderTitle = event.EventTitle;
+                if (event.EventType && !placeholderTitle.toLowerCase().includes(String(event.EventType).toLowerCase())) {
+                    placeholderTitle = `${event.EventTitle} (${event.EventType} Series)`;
+                } else if (!placeholderTitle.toLowerCase().includes("series")) {
+                     placeholderTitle = `${event.EventTitle} (Series)`;
+                }
+                processedEvents.push({
+                    title: placeholderTitle, 
+                    start: fcStart, 
+                    end: fcStart, 
                     allDay: true, 
-                    timeZone: event.eventActualTimeZone || defaultFallbackTimeZone,
+                    timeZone: eventTimeZoneForFC,
                     extendedProps: { ...event, isPlaceholder: true } 
-                };
-                processedEvents.push(parentEventForCalendar);
+                });
+            } else {
+                console.log(`  Action: SKIPPING Parent (because series are expanded) for "${event.EventTitle}"`);
             }
         } else if (isGeneratedInstance) {
-            if (showExpandedSeries) {
-                let fcStart = event.StartDate;
-                let fcEnd = event.EndDate;
-                const isAllDay = event.IsAllDay === true || String(event.IsAllDay).toUpperCase() === "TRUE";
-                const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
-
+            if (showExpandedSeries) { 
+                console.log(`  Action: Adding GENERATED instance for "${event.EventTitle}"`);
                 if (isAllDay) { 
                     if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
                     if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
                 }
-                
                 processedEvents.push({
                     title: event.EventTitle, 
                     start: fcStart,
                     end: fcEnd,
-                    allDay: isAllDay,
+                    allDay: isAllDay, 
                     timeZone: eventTimeZoneForFC,
                     extendedProps: { ...event }
                 });
+            } else {
+                console.log(`  Action: SKIPPING Generated instance (because series are collapsed) for "${event.EventTitle}"`);
             }
-        } else {
-            let fcStart = event.StartDate;
-            let fcEnd = event.EndDate;
-            const isAllDay = event.IsAllDay === true || String(event.IsAllDay).toUpperCase() === "TRUE";
-            const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
-
+        } else { 
+            console.log(`  Action: Adding SINGLE event "${event.EventTitle}" (IsParent: ${isSeriesParentEvent}, IsInstance: ${isGeneratedInstance})`);
             if (isAllDay) {
                 if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
                 if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
             }
-            
             processedEvents.push({
                 title: event.EventTitle,
                 start: fcStart,
@@ -103,6 +118,7 @@ function processDataForCalendar() {
             });
         }
     });
+    console.log(`Total events prepared for calendar display: ${processedEvents.length}`);
     return processedEvents;
 }
 
@@ -110,13 +126,14 @@ async function initializeApp() {
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
     try {
-        const [events, churches, ministers, participants, guestParticipants, servicePatterns] = await Promise.all([
+        const [events, churches, ministers, participants, guestParticipants, servicePatterns, groupMembers] = await Promise.all([
             fetchData('Events'),
             fetchData('Churches'),
             fetchData('Ministers'),
             fetchData('EventParticipants'),
             fetchData('GuestParticipants'), 
-            fetchData('ServiceSchedulePatterns') 
+            fetchData('ServiceSchedulePatterns') ,
+            fetchData('GroupMembers') // <-- ADD THIS LINE
         ]);
 
         allEventsData = events || [];
@@ -125,10 +142,19 @@ async function initializeApp() {
         allEventParticipantsData = participants || [];
         allGroupsData = guestParticipants || []; 
         allServiceSchedulePatterns = servicePatterns || []; 
+        allGroupMembersData = groupMembers || []; // <-- ADD THIS LINE
 
-        if (allEventsData.length === 0 && allChurchesData.length === 0) {
-            console.warn("Initial data fetch returned empty for critical data (Events/Churches).");
+        console.log("Fetched allEventsData count in initializeApp:", allEventsData.length);
+        if (allEventsData.length > 0) {
+            console.log("Sample event data item 0 from allEventsData:", JSON.stringify(allEventsData[0]));
+            const seriesParentExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() === "true");
+            if(seriesParentExample) console.log("Sample series parent from allEventsData:", JSON.stringify(seriesParentExample));
+            const generatedInstanceExample = allEventsData.find(ev => String(ev.isGeneratedInstance).toLowerCase() === "true");
+            if(generatedInstanceExample) console.log("Sample generated instance from allEventsData:", JSON.stringify(generatedInstanceExample));
+            const singleEventExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() !== "true" && String(ev.isGeneratedInstance).toLowerCase() !== "true");
+            if(singleEventExample) console.log("Sample single event from allEventsData:", JSON.stringify(singleEventExample));
         }
+
 
         populateFilterDropdowns();
         applyFilters(); 
@@ -282,7 +308,9 @@ function populateFilterDropdowns() {
         eventTypeFilterEl.innerHTML = '<option value="">-- Select Type --</option>';
         if (allEventsData && allEventsData.length > 0) {
             const uniqueEventTypes = new Set();
-            allEventsData.forEach(event => { if(event && event.EventType) uniqueEventTypes.add(event.EventType); });
+            allEventsData.forEach(event => { 
+                if(event && event.EventType) uniqueEventTypes.add(event.EventType); 
+            });
             [...uniqueEventTypes].filter(Boolean).sort().forEach(type => eventTypeFilterEl.add(new Option(type, type)));
         }
         eventTypeFilterEl.removeEventListener('change', handleEventTypeFilterChange);
@@ -314,21 +342,28 @@ function populateFilterDropdowns() {
 
 function handleAddFilter(category, value) { 
     if (!value || value === "") { 
+        if (activeFilters[category].size > 0) { 
+            activeFilters[category].clear();
+            if (category === 'eventType') updateParticipantOptions();
+            renderActiveFilterTags();
+            applyFilters();
+        }
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0; 
+        if (filterDropdown) filterDropdown.selectedIndex = 0;
         return; 
     }
     const storeValue = value; 
     let changed = false;
     if (activeFilters[category].has(storeValue)) {
         const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0;
+        if (filterDropdown) filterDropdown.selectedIndex = 0; 
         return; 
     }
     activeFilters[category].add(storeValue);
     changed = true;
     if (changed) {
         if (category === 'eventType') {
+            if (activeFilters.participant.size > 0) activeFilters.participant.clear(); 
             updateParticipantOptions(); 
         }
         renderActiveFilterTags();
@@ -430,23 +465,15 @@ document.addEventListener('DOMContentLoaded', function() {
         timeZone: 'local', 
         events: [], 
         weekends: true,
-        loading: function(isLoading) {
-            const loadingEl = document.getElementById('loading-indicator');
-            if (loadingEl) loadingEl.style.display = isLoading ? 'block' : 'none';
-        },
-        datesSet: function(viewInfo) { // Use datesSet or viewDidMount
+        loading: function(isLoading) { /* ... */ },
+        datesSet: function(viewInfo) { 
             const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
             if (expandSeriesCheckbox && viewInfo.view.type === 'listDay') {
-                if (!expandSeriesCheckbox.checked) { // Only if not already checked
+                if (!expandSeriesCheckbox.checked) { 
                     expandSeriesCheckbox.checked = true;
-                    applyFilters(); // Re-apply filters to show expanded series
+                    applyFilters(); 
                 }
             }
-            //  Optional: If you want to uncheck it when leaving listDay:
-             else if (expandSeriesCheckbox && expandSeriesCheckbox.checked && viewInfo.view.type === 'listDay') {
-                 expandSeriesCheckbox.checked = false;
-                 applyFilters();
-             }
         },
         eventClick: function(info) {
             if (!eventDetailModalInstance) {
@@ -606,3 +633,4 @@ document.addEventListener('DOMContentLoaded', function() {
     calendar.render();
     initializeApp();
 });
+
