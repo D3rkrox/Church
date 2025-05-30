@@ -43,87 +43,72 @@ async function fetchData(sheetName) {
 
 function processDataForCalendar() {
     let processedEvents = [];
-    const defaultFallbackTimeZone = 'America/Chicago';
     const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
-    const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false; 
-
-    //console.log(`--- processDataForCalendar ---`);
-    //console.log(`Show Expanded Series (Checkbox state): ${showExpandedSeries}`);
-    //console.log(`Total items in allEventsData to process: ${allEventsData.length}`);
+    const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false;
 
     allEventsData.forEach((event, index) => {
         if (!event || !event.EventTitle || !event.StartDate) {
-            // console.warn(`Event index ${index}: Skipping due to missing Title or StartDate`, event);
             return;
         }
 
-        // Robustly check boolean flags
-        const isSeriesParentEvent = String(event.IsSeriesParent).toLowerCase() === "true";
-        const isGeneratedInstance = String(event.isGeneratedInstance).toLowerCase() === "true";
+        const eventSourceType = String(event.sourceType || '').trim();
 
-        // Detailed log for each event before decision making
-        //console.log(`Processing Event [${index}]: "${event.EventTitle}" -- IsSeriesParent_Raw: ${event.IsSeriesParent}, IsSeriesParent_Parsed: ${isSeriesParentEvent}, isGeneratedInstance_Raw: ${event.isGeneratedInstance}, isGeneratedInstance_Parsed: ${isGeneratedInstance}`);
+        let fcEventData = {
+            title: event.EventTitle,
+            start: event.StartDate,
+            //end: event.EndDate,
+            allDay: String(event.IsAllDay).toLowerCase() === "true",
+            timeZone: event.eventActualTimeZone || 'America/Chicago',
+            extendedProps: { ...event } 
+        };
 
-        let fcStart = event.StartDate;
-        let fcEnd = event.EndDate;
-        const isAllDay = String(event.IsAllDay).toLowerCase() === "true"; 
-        const eventTimeZoneForFC = event.eventActualTimeZone || defaultFallbackTimeZone;
-
-        if (isSeriesParentEvent) {
-            if (!showExpandedSeries) { 
-                //console.log(`  Action: Adding PARENT placeholder for "${event.EventTitle}"`);
-                let placeholderTitle = event.EventTitle;
-                if (event.EventType && !placeholderTitle.toLowerCase().includes(String(event.EventType).toLowerCase())) {
-                    placeholderTitle = `${event.EventTitle} (${event.EventType} Series)`;
-                } else if (!placeholderTitle.toLowerCase().includes("series")) {
-                     placeholderTitle = `${event.EventTitle} (Series)`;
-                }
-                processedEvents.push({
-                    title: placeholderTitle, 
-                    start: fcStart, 
-                    end: fcStart, 
-                    allDay: true, 
-                    timeZone: eventTimeZoneForFC,
-                    extendedProps: { ...event, isPlaceholder: true } 
-                });
-            } else {
-                //console.log(`  Action: SKIPPING Parent (because series are expanded) for "${event.EventTitle}"`);
+        if (fcEventData.allDay) {
+            if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
+                fcEventData.start = fcEventData.start.substring(0, 10);
             }
-        } else if (isGeneratedInstance) {
-            if (showExpandedSeries) { 
-                //console.log(`  Action: Adding GENERATED instance for "${event.EventTitle}"`);
-                if (isAllDay) { 
-                    if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
-                    if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
-                }
-                processedEvents.push({
-                    title: event.EventTitle, 
-                    start: fcStart,
-                    end: fcEnd,
-                    allDay: isAllDay, 
-                    timeZone: eventTimeZoneForFC,
-                    extendedProps: { ...event }
-                });
-            } else {
-               // console.log(`  Action: SKIPPING Generated instance (because series are collapsed) for "${event.EventTitle}"`);
+            if (fcEventData.end && typeof fcEventData.end === 'string' && fcEventData.end.includes('T')) {
+                fcEventData.end = fcEventData.end.substring(0, 10);
             }
+        }
+
+        if (eventSourceType.startsWith('special-event-series-parent')) {
+            // console.log("Processing potential series parent:", event.EventTitle, "ShowExpanded:", showExpandedSeries); 
+            if (!showExpandedSeries) {
+                // console.log(">>> Adding parent placeholder as REGULAR ALL-DAY EVENT for:", event.EventTitle); 
+
+                // --- TEMPORARY CHANGE: Make it a normal all-day event ---
+                fcEventData.allDay = true; 
+                // fcEventData.display = 'background'; // Comment out background display
+                // fcEventData.backgroundColor = '#FFC107'; // Comment out background color
+                fcEventData.title = `${event.EventTitle} (${event.EventType} Series)`; // Keep a distinct title
+                fcEventData.extendedProps.isPlaceholder = true; // Still mark it
+
+                // Ensure start and end are YYYY-MM-DD for allDay events
+                // The global allDay formatting block later will handle the substring(0,10)
+                // We just need to ensure fcEventData.start and fcEventData.end are correct
+                // For a multi-day all-day event, 'end' is exclusive.
+                // StartDate: "2025-06-08T05:00:00.000Z" -> '2025-06-08'
+                // EndDate:   "2025-06-14T04:59:00.000Z" -> means it includes up to end of 13th. Exclusive end should be '2025-06-14'
+                // The fcEventData already has these UTC strings. The allDay formatting block handles the conversion.
+
+                processedEvents.push(fcEventData);
+            }
+        }  else if (eventSourceType.startsWith('special-event-series-instance')) {
+            if (showExpandedSeries) {
+                processedEvents.push(fcEventData);
+            }
+        } else if (eventSourceType.startsWith('regular-')) {
+            processedEvents.push(fcEventData);
+        } else if (eventSourceType.startsWith('special-event-single')) {
+            processedEvents.push(fcEventData);
         } else { 
-            //console.log(`  Action: Adding SINGLE event "${event.EventTitle}" (IsParent: ${isSeriesParentEvent}, IsInstance: ${isGeneratedInstance})`);
-            if (isAllDay) {
-                if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
-                if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
+            // Fallback for events from "Events" sheet that might not have sourceType yet in an old cache
+            // OR if sourceType was ""
+            if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
+                processedEvents.push(fcEventData);
             }
-            processedEvents.push({
-                title: event.EventTitle,
-                start: fcStart,
-                end: fcEnd,
-                allDay: isAllDay,
-                timeZone: eventTimeZoneForFC,
-                extendedProps: { ...event }
-            });
         }
     });
-    //console.log(`Total events prepared for calendar display: ${processedEvents.length}`);
     return processedEvents;
 }
 
@@ -308,6 +293,15 @@ function populateFilterDropdowns() {
     const churchFilterEl = document.getElementById('churchFilter');
     const participantFilterEl = document.getElementById('participantFilter'); 
     const expandSeriesFilterEl = document.getElementById('expandSeriesFilter'); 
+    if (expandSeriesFilterEl) {
+        expandSeriesFilterEl.removeEventListener('change', applyFilters); 
+        expandSeriesFilterEl.addEventListener('change', applyFilters);
+    }
+    const includeRegularServicesFilterEl = document.getElementById('includeRegularServicesFilter');
+    if (includeRegularServicesFilterEl) {
+        includeRegularServicesFilterEl.removeEventListener('change', applyFilters);
+        includeRegularServicesFilterEl.addEventListener('change', applyFilters);
+    }
 
     if (eventTypeFilterEl) {
         eventTypeFilterEl.innerHTML = '<option value="">-- Select Type --</option>';
@@ -396,22 +390,55 @@ function handleParticipantFilterChange(e) { if(e.target) handleAddFilter('partic
 function applyFilters() {
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
+
     setTimeout(() => {
-        let eventsToDisplay = processDataForCalendar(); 
+        let eventsToDisplay = processDataForCalendar();
+        
+        // --- START DEBUG LOGS ---
+        console.log("APPLYFILTERS --- START ---");
+        const getParentPlaceholders = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-parent'));
+        const getRegularServices = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('regular-'));
+        const getSeriesInstances = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-instance'));
+        const getSingleSpecial = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-single'));
+
+        console.log(`APPLYFILTERS: Initial from processDataForCalendar: ${eventsToDisplay.length} events.`);
+        console.log(`  Initial - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+        console.log(`  Initial - Regular Services: ${getRegularServices(eventsToDisplay).length}`);
+        console.log(`  Initial - Series Instances: ${getSeriesInstances(eventsToDisplay).length}`);
+        console.log(`  Initial - Single Special: ${getSingleSpecial(eventsToDisplay).length}`);
+
+
+        const activeFiltersState = {};
+        for (const category in activeFilters) {
+            activeFiltersState[category] = Array.from(activeFilters[category]);
+        }
+        console.log("APPLYFILTERS: Current Active Filters State:", JSON.stringify(activeFiltersState));
+        // --- END DEBUG LOGS ---
+
         if (activeFilters.eventType.size > 0) {
             eventsToDisplay = eventsToDisplay.filter(fcEvent =>
                 fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => 
                     String(fcEvent.extendedProps.EventType || "").trim() === typeFilter
                 )
             );
+            // --- DEBUG LOG ---
+            console.log(`APPLYFILTERS: After EventType filter: ${eventsToDisplay.length} events.`);
+            console.log(`  After EventType - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            // --- END DEBUG LOG ---
         }
+
         if (activeFilters.church.size > 0) {
             eventsToDisplay = eventsToDisplay.filter(fcEvent => 
                 fcEvent.extendedProps && [...activeFilters.church].some(churchFilter =>
                     String(fcEvent.extendedProps.ChurchID || "").trim() === churchFilter
                 )
             );
+            // --- DEBUG LOG ---
+            console.log(`APPLYFILTERS: After Church filter: ${eventsToDisplay.length} events.`);
+            console.log(`  After Church - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            // --- END DEBUG LOG ---
         }
+
         if (activeFilters.participant.size > 0) {
             eventsToDisplay = eventsToDisplay.filter(fcEvent => {
                 if (!fcEvent.extendedProps || !fcEvent.extendedProps.EventID) return false;
@@ -433,11 +460,40 @@ function applyFilters() {
                     return nameToCheck && activeFilters.participant.has(nameToCheck);
                 });
             });
+            // --- DEBUG LOG ---
+            console.log(`APPLYFILTERS: After Participant filter: ${eventsToDisplay.length} events.`);
+            console.log(`  After Participant - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            // --- END DEBUG LOG ---
         }
+
+        const includeRegularServicesCheckbox = document.getElementById('includeRegularServicesFilter');
+        const regularServicesChecked = includeRegularServicesCheckbox ? includeRegularServicesCheckbox.checked : false; // Default to false if not found
+        // --- DEBUG LOG ---
+        console.log("APPLYFILTERS: 'Include Regular Services' checkbox checked:", regularServicesChecked);
+        // --- END DEBUG LOG ---
+        
+        if (!regularServicesChecked) { // If "Include Regular Services" is UNCHECKED
+            eventsToDisplay = eventsToDisplay.filter(fcEvent =>
+                fcEvent.extendedProps.sourceType && 
+                fcEvent.extendedProps.sourceType.startsWith('special-event') 
+            );
+            // --- DEBUG LOG ---
+            console.log(`APPLYFILTERS: After 'Include Regular Services' (if unchecked): ${eventsToDisplay.length} events.`);
+            console.log(`  After Reg.Svc. (unchecked) - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            // --- END DEBUG LOG ---
+        }
+        
+        // --- DEBUG LOG ---
+        console.log(`APPLYFILTERS: Final eventsToDisplay for renderCalendar: ${eventsToDisplay.length} events.`);
+        console.log(`  Final - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+        console.log("APPLYFILTERS --- END ---");
+        // --- END DEBUG LOGS ---
+
         renderCalendar(eventsToDisplay);
         if (loadingIndicator) loadingIndicator.style.display = 'none';
     }, 10);
 }
+
 function parseSimpleTimeForSort(timeStr) {
     if (!timeStr || typeof timeStr !== 'string') return null;
     const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);

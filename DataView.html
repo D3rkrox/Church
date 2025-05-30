@@ -261,86 +261,134 @@
                 else console.error("View Services button clicked without a churchId.");
             });
         }
+        
         function displayServicesInModal(churchId, churchName) {
-            const modalTitle = document.getElementById("servicesModalLabel");
-            const modalBody = document.getElementById("servicesModalBody");
+        const modalTitle = document.getElementById("servicesModalLabel");
+        const modalBody = document.getElementById("servicesModalBody");
 
-            if(!modalTitle || !modalBody){ console.error("Services modal elements not found!"); return; }
+        if (!modalTitle || !modalBody) {
+            console.error("Services modal elements not found!");
+            return;
+        }
 
-            modalTitle.textContent = `Services for ${churchName}`;
-            modalBody.innerHTML = '<p>Loading services...</p>'; // Reset body
+        modalTitle.textContent = `Regular Service Schedule for ${churchName}`;
+        let html = "";
 
-            const servicesForChurch = allServicesData.filter(
-                service => service && String(service.ChurchID).trim() === churchId.trim()
-            );
+        const servicesForChurch = allServicesData.filter(
+            s => s && String(s.ChurchID).trim() === String(churchId).trim()
+        );
 
-            let regularServicesHtml = "<h6>Weekly Services</h6>";
-            let specialServicesHtml = "<h6>Regular Weekend & Communion  Service</h6>";
-            let hasRegular = false;
-            let hasSpecial = false;
+        if (servicesForChurch.length === 0) {
+            html = "<p>No regular services listed for this church.</p>";
+        } else {
+            const weeklyServices = servicesForChurch.filter(s => s.RecurrenceType === 'Weekly');
+            const monthlyNthServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyNthWeekday');
+            const monthlyRelativeServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyRelativeToRule');
 
-            const regularServicesByDay = {};
-            const specialServiceEntries = [];
-
-            if (servicesForChurch.length > 0) {
-                servicesForChurch.forEach(s => {
-                    if (!s) return;
-                    if (String(s.ServiceDay).toLowerCase() === "special") {
-                        specialServiceEntries.push(s);
-                        hasSpecial = true;
-                    } else if (s.ServiceDay) { // Regular day
-                        if (!regularServicesByDay[s.ServiceDay]) regularServicesByDay[s.ServiceDay] = [];
-                        regularServicesByDay[s.ServiceDay].push(s);
-                        hasRegular = true;
-                    }
+            // --- Display Weekly Services (grouped by day) ---
+            if (weeklyServices.length > 0) {
+                html += "<h5>Weekly Services</h5><ul>";
+                const weeklyByDay = {};
+                const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                
+                weeklyServices.forEach(s => {
+                    if (!weeklyByDay[s.DayOfWeek]) weeklyByDay[s.DayOfWeek] = [];
+                    weeklyByDay[s.DayOfWeek].push(s);
                 });
 
-                if (hasRegular) {
-                    const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                    let tempRegularHtml = "";
-                    dayOrder.forEach(dayKey => {
-                        if (regularServicesByDay[dayKey] && regularServicesByDay[dayKey].length > 0) {
-                            tempRegularHtml += `<h5>${dayKey}</h5><ul>`;
-                            regularServicesByDay[dayKey].sort((a,b) => (parseSimpleTimeForSort(a.ServiceTime)||0) - (parseSimpleTimeForSort(b.ServiceTime)||0))
-                                .forEach(service => { 
-                                    tempRegularHtml += `<li class="service-detail"><strong>${service.ServiceTime||'N/A'}:</strong> ${service.ServiceType||'N/A'}</li>`; 
-                                });
-                            tempRegularHtml += "</ul>";
-                        }
-                    });
-                    if (tempRegularHtml === "") tempRegularHtml = "<p>No regular weekly services listed.</p>";
-                    regularServicesHtml += tempRegularHtml;
-                } else {
-                    regularServicesHtml += "<p>No regular weekly services listed.</p>";
-                }
-
-                if (hasSpecial) {
-                    let tempSpecialHtml = "<ul>";
-                    // Optionally sort special services, e.g., by rule or type
-                    specialServiceEntries.sort((a,b) => (a.RegularMeetingRule || "").localeCompare(b.RegularMeetingRule || "") || (parseSimpleTimeForSort(a.ServiceTime)||0) - (parseSimpleTimeForSort(b.ServiceTime)||0) )
-                        .forEach(service => {
-                        tempSpecialHtml += `<li class="service-detail">`;
-                            if (service.RegularMeetingRule) {
-                                tempSpecialHtml += `<strong>${service.ServiceType || 'Special Service'} on ${service.RegularMeetingRule || 'N/A'}</strong>`;
-                            }
-                            if(service.CommunionNight) {
-                                tempSpecialHtml += `<strong>${service.ServiceType || 'Special Service'} on ${service.CommunionNight || 'N/A'}</strong>`;
-                            }
-                        tempSpecialHtml += `</li>`;
-                    });
-                    tempSpecialHtml += "</ul>";
-                    specialServicesHtml += tempSpecialHtml;
-                } else {
-                    specialServicesHtml += "<p>No special monthly or other services listed.</p>";
-                }
-
-                modalBody.innerHTML = regularServicesHtml + "<hr>" + specialServicesHtml;
-
+                dayOrder.forEach(day => {
+                    if (weeklyByDay[day] && weeklyByDay[day].length > 0) {
+                        html += `<li class="mb-2"><strong>${day}:</strong><ul>`; // Added mb-2 for spacing
+                        weeklyByDay[day]
+                            .sort((a,b) => (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0))
+                            .forEach(s => {
+                                let title = s.ServiceTitle || "Service";
+                                if ((s.IsCommunionFlag === true || String(s.IsCommunionFlag).toLowerCase() === 'true') && !title.toLowerCase().includes("communion")) {
+                                    title += " (Communion)";
+                                }
+                                
+                                html += `<li>${title} at ${s.Time || 'N/A'}</li>`; 
+                            });
+                        html += `</ul></li>`;
+                    }
+                });
+                html += "</ul>";
             } else {
-                modalBody.innerHTML = "<p>No services listed for this church.</p>";
+                 html += "<h5>Weekly Services</h5><p>No regular weekly services listed.</p>";
             }
-            $('#servicesModal').modal('show');
+            html += "<hr>";
+
+            // --- Display Monthly Nth Weekday Services (Title as Header) ---
+            if (monthlyNthServices.length > 0) {
+                const monthlyNthByTitle = {};
+                monthlyNthServices.forEach(s => {
+                    const titleKey = s.ServiceTitle || "Untitled Monthly Service";
+                    if (!monthlyNthByTitle[titleKey]) monthlyNthByTitle[titleKey] = [];
+                    monthlyNthByTitle[titleKey].push(s);
+                });
+
+                for (const serviceTitleKey in monthlyNthByTitle) {
+                    html += `<h5>${serviceTitleKey}</h5>`; // Use the ServiceTitle as the header
+                    html += "<ul>";
+                    
+                    monthlyNthByTitle[serviceTitleKey]
+                        .sort((a,b) => { 
+                            const nthOrder = ["1st", "2nd", "3rd", "4th", "Last"];
+                            const dayOrderVal = {"Sunday":0, "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6};
+                            let comparison = (nthOrder.indexOf(a.NthOccurrence) || 5) - (nthOrder.indexOf(b.NthOccurrence) || 5) ;
+                            if (comparison === 0) comparison = (dayOrderVal[a.DayOfWeek] !== undefined ? dayOrderVal[a.DayOfWeek] : 7) - (dayOrderVal[b.DayOfWeek] !== undefined ? dayOrderVal[b.DayOfWeek] : 7);
+                            if (comparison === 0) comparison = (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0);
+                            return comparison;
+                        })
+                        .forEach(s => {
+                            // Use the helper to get the rule description
+                            html += `<li>${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
+                        });
+                    html += "</ul>";
+                }
+                html += "<hr>";
+            } else {
+                html += "<h5>Monthly Services</h5><p>No Nth weekday services listed.</p><hr>";
+            }
+
+            // --- Display Monthly Relative Services (Title as Header) ---
+            if (monthlyRelativeServices.length > 0) {
+                const monthlyRelativeByTitle = {};
+                monthlyRelativeServices.forEach(s => {
+                    const titleKey = s.ServiceTitle || "Untitled Relative Service";
+                    if (!monthlyRelativeByTitle[titleKey]) monthlyRelativeByTitle[titleKey] = [];
+                    monthlyRelativeByTitle[titleKey].push(s);
+                });
+
+                for (const serviceTitleKey in monthlyRelativeByTitle) {
+                    html += `<h5>${serviceTitleKey}</h5>`; // Use ServiceTitle as header
+                     html += "<ul>";
+                    monthlyRelativeByTitle[serviceTitleKey]
+                        .sort((a,b) => (formatServiceRuleDescription(a, churchId, serviceTitleKey)).localeCompare(formatServiceRuleDescription(b, churchId, serviceTitleKey)))
+                        .forEach(s => {
+                            html += `<li>${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
+                        });
+                    html += "</ul>";
+                }
+            } else {
+                html += "<h5>Other Monthly Services</h5><p>No relative monthly services listed.</p>";
+            }
+            
+            const otherServices = servicesForChurch.filter(s => 
+                s.RecurrenceType !== 'Weekly' && 
+                s.RecurrenceType !== 'MonthlyNthWeekday' && 
+                s.RecurrenceType !== 'MonthlyRelativeToRule'
+            );
+            if (otherServices.length > 0) {
+                 html += "<hr><h5>Other Schedules</h5><ul>";
+                 otherServices.forEach(s => { html += `<li><strong>${s.ServiceTitle || "Service"}</strong>: Rule: ${s.RecurrenceRule || s.ServiceDay || 'N/A'} at ${s.Time || 'N/A'}</li>`; });
+                 html += "</ul>";
+            }
         }
+        modalBody.innerHTML = html;
+        $('#servicesModal').modal('show');
+    }
+        
         function parseSimpleTimeForSort(timeStr) { 
             if (!timeStr || typeof timeStr !== 'string') return null;
             const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -353,6 +401,68 @@
             return hours * 60 + minutes; 
         }
 
+        function formatServiceRuleDescription(service, churchId, serviceHeaderTitle = "") {
+        let description = "";
+        let lowerServiceHeaderTitle = (serviceHeaderTitle || service.ServiceTitle || "").toLowerCase(); // Use service.ServiceTitle as fallback
+
+        // Default time and duration strings that will be used by some types
+        let timeText = service.Time ? ` at ${service.Time}` : ''; // Changed default for time
+        let durationText = service.DurationMinutes ? ` (${service.DurationMinutes} mins)` : '';
+        
+        let communionText = "";
+        // Add communion text if applicable and not already indicated by the header title itself
+        if ((service.IsCommunionFlag === true || String(service.IsCommunionFlag).toLowerCase() === 'true') && 
+            !lowerServiceHeaderTitle.includes("communion")) {
+            communionText = " (Communion)";
+        }
+
+        if (service.RecurrenceType === 'MonthlyNthWeekday') {
+            description = `The ${service.NthOccurrence || ''} ${service.DayOfWeek || ''} of the month`;
+            // For this type, time/duration are omitted from this line as per your previous request.
+            return `${description}${communionText}`; 
+
+        } else if (service.RecurrenceType === 'MonthlyRelativeToRule') {
+            // *** NEW: Special handling if the header title is "Communion" or "Communion Service" ***
+            if (lowerServiceHeaderTitle === 'communion' || lowerServiceHeaderTitle === 'communion service') {
+                return `${service.DayOfWeek || 'Day not specified'}`; // Just the day
+            }
+            // *** END NEW ***
+
+            // Existing logic for other "MonthlyRelativeToRule" services
+            let baseRuleDesc = service.RelativeToServiceID || 'specified rule';
+            if (typeof allServicesData !== 'undefined' && allServicesData.length > 0) {
+                const baseService = allServicesData.find(s_lookup => 
+                    s_lookup.ServiceID === service.RelativeToServiceID && 
+                    s_lookup.ChurchID === churchId 
+                );
+                if (baseService && baseService.ServiceTitle) {
+                    baseRuleDesc = `"${baseService.ServiceTitle}"`;
+                }
+            }
+            
+            let offsetDesc = "";
+            const offsetDays = parseInt(service.RelativeOffsetDays, 10);
+            if (offsetDays === 0) offsetDesc = "on the same day as";
+            else if (offsetDays === -1) offsetDesc = "the day before";
+            else if (offsetDays === 1) offsetDesc = "the day after";
+            else if (offsetDays < -1) offsetDesc = `${Math.abs(offsetDays)} days before`;
+            else if (offsetDays > 1) offsetDesc = `${offsetDays} days after`;
+            else offsetDesc = ""; 
+
+            description = `${service.DayOfWeek || ''}${timeText}, ${offsetDesc} ${baseRuleDesc}`;
+            return `${description}${communionText}${durationText}`;
+
+        } else if (service.RecurrenceType === 'Weekly') {
+            // Weekly services are formatted directly in the main displayServicesInModal loop for grouping.
+            // This is a fallback if this helper is somehow called for a weekly type.
+            description = `Every ${service.DayOfWeek || ''}${timeText}`;
+            return `${description}${communionText}${durationText}`;
+        } else {
+            // Fallback for any other unknown types
+            description = `Rule: ${service.RecurrenceRule || 'Not specified'}${timeText}`;
+            return `${description}${communionText}${durationText}`;
+        }
+    }
         async function geocodeAddressWithNominatim(address) {
             const encodedAddress = encodeURIComponent(address);
             const headers = new Headers({ 'User-Agent': 'ChurchDenominationMap/1.0 (ChurchApp@gmail.com)' }); // Replace with your info
