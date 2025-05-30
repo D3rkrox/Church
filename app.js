@@ -395,24 +395,24 @@ function applyFilters() {
         let eventsToDisplay = processDataForCalendar();
         
         // --- START DEBUG LOGS ---
-        console.log("APPLYFILTERS --- START ---");
+        //console.log("APPLYFILTERS --- START ---");
         const getParentPlaceholders = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-parent'));
         const getRegularServices = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('regular-'));
         const getSeriesInstances = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-instance'));
         const getSingleSpecial = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-single'));
 
-        console.log(`APPLYFILTERS: Initial from processDataForCalendar: ${eventsToDisplay.length} events.`);
-        console.log(`  Initial - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-        console.log(`  Initial - Regular Services: ${getRegularServices(eventsToDisplay).length}`);
-        console.log(`  Initial - Series Instances: ${getSeriesInstances(eventsToDisplay).length}`);
-        console.log(`  Initial - Single Special: ${getSingleSpecial(eventsToDisplay).length}`);
+        //console.log(`APPLYFILTERS: Initial from processDataForCalendar: ${eventsToDisplay.length} events.`);
+        //console.log(`  Initial - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+        //console.log(`  Initial - Regular Services: ${getRegularServices(eventsToDisplay).length}`);
+        //console.log(`  Initial - Series Instances: ${getSeriesInstances(eventsToDisplay).length}`);
+        //console.log(`  Initial - Single Special: ${getSingleSpecial(eventsToDisplay).length}`);
 
 
         const activeFiltersState = {};
         for (const category in activeFilters) {
             activeFiltersState[category] = Array.from(activeFilters[category]);
         }
-        console.log("APPLYFILTERS: Current Active Filters State:", JSON.stringify(activeFiltersState));
+        //console.log("APPLYFILTERS: Current Active Filters State:", JSON.stringify(activeFiltersState));
         // --- END DEBUG LOGS ---
 
         if (activeFilters.eventType.size > 0) {
@@ -422,8 +422,8 @@ function applyFilters() {
                 )
             );
             // --- DEBUG LOG ---
-            console.log(`APPLYFILTERS: After EventType filter: ${eventsToDisplay.length} events.`);
-            console.log(`  After EventType - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            //console.log(`APPLYFILTERS: After EventType filter: ${eventsToDisplay.length} events.`);
+            //console.log(`  After EventType - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
             // --- END DEBUG LOG ---
         }
 
@@ -434,8 +434,8 @@ function applyFilters() {
                 )
             );
             // --- DEBUG LOG ---
-            console.log(`APPLYFILTERS: After Church filter: ${eventsToDisplay.length} events.`);
-            console.log(`  After Church - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            //console.log(`APPLYFILTERS: After Church filter: ${eventsToDisplay.length} events.`);
+            //console.log(`  After Church - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
             // --- END DEBUG LOG ---
         }
 
@@ -461,15 +461,15 @@ function applyFilters() {
                 });
             });
             // --- DEBUG LOG ---
-            console.log(`APPLYFILTERS: After Participant filter: ${eventsToDisplay.length} events.`);
-            console.log(`  After Participant - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            //console.log(`APPLYFILTERS: After Participant filter: ${eventsToDisplay.length} events.`);
+            //console.log(`  After Participant - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
             // --- END DEBUG LOG ---
         }
 
         const includeRegularServicesCheckbox = document.getElementById('includeRegularServicesFilter');
         const regularServicesChecked = includeRegularServicesCheckbox ? includeRegularServicesCheckbox.checked : false; // Default to false if not found
         // --- DEBUG LOG ---
-        console.log("APPLYFILTERS: 'Include Regular Services' checkbox checked:", regularServicesChecked);
+        //console.log("APPLYFILTERS: 'Include Regular Services' checkbox checked:", regularServicesChecked);
         // --- END DEBUG LOG ---
         
         if (!regularServicesChecked) { // If "Include Regular Services" is UNCHECKED
@@ -478,15 +478,15 @@ function applyFilters() {
                 fcEvent.extendedProps.sourceType.startsWith('special-event') 
             );
             // --- DEBUG LOG ---
-            console.log(`APPLYFILTERS: After 'Include Regular Services' (if unchecked): ${eventsToDisplay.length} events.`);
-            console.log(`  After Reg.Svc. (unchecked) - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+            //console.log(`APPLYFILTERS: After 'Include Regular Services' (if unchecked): ${eventsToDisplay.length} events.`);
+            //console.log(`  After Reg.Svc. (unchecked) - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
             // --- END DEBUG LOG ---
         }
         
         // --- DEBUG LOG ---
-        console.log(`APPLYFILTERS: Final eventsToDisplay for renderCalendar: ${eventsToDisplay.length} events.`);
-        console.log(`  Final - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-        console.log("APPLYFILTERS --- END ---");
+        //console.log(`APPLYFILTERS: Final eventsToDisplay for renderCalendar: ${eventsToDisplay.length} events.`);
+        //console.log(`  Final - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
+        //console.log("APPLYFILTERS --- END ---");
         // --- END DEBUG LOGS ---
 
         renderCalendar(eventsToDisplay);

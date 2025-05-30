@@ -22,35 +22,15 @@
         .modal-body li { margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px dashed #eee; }
         .modal-body li:last-child { border-bottom: none; }
         .modal-body h5 { margin-top: 15px; }
-        div.dataTables_wrapper div.dataTables_filter input,
-        div.dataTables_wrapper div.dataTables_length select {
-            margin-left: 0.5em; display: inline-block; width: auto;
-            padding: .375rem .75rem; font-size: 0.875rem;
-            font-weight: 400; line-height: 1.5; color: #495057;
-            background-color: #fff; background-clip: padding-box;
-            border: 1px solid #ced4da; border-radius: .25rem;
+        div.dataTables_length {
+            display:none;
         }
+        
         .view-services-btn, .show-map-btn { white-space: nowrap; }
         #mapModalLeaflet .modal-dialog { max-width: 90%; } 
         #mapCanvasLeaflet { height: 70vh; width: 100%; border: 1px solid #ccc; } 
         .map-controls { margin-bottom: 15px; text-align: center; }
-        div.dataTables_wrapper div.dataTables_length select { /* Styling for "Show X entries" dropdown */
-            width: auto; /* Let content determine width initially */
-            min-width: 50px; /* Set a minimum width - adjusted to 70px for better look */
-            display: inline-block;
-            padding: .375rem 1.75rem .375rem .75rem; /* Adjust padding for select arrow and content */
-            font-size: 0.875rem; 
-            font-weight: 400;
-            line-height: 1.5;
-            color: #495057;
-            background-color: #fff;
-            /* background-image: ... (Bootstrap's default select arrow) ... */ /* This is usually handled by Bootstrap's CSS */
-            /* background-repeat: no-repeat; */
-            /* background-position: right .75rem center; */
-            /* background-size: 16px 12px; */
-            border: 1px solid #ced4da;
-            border-radius: .25rem;
-        }
+        
     </style>
 </head>
 <body>
@@ -82,7 +62,7 @@
                 <thead class="thead-dark">
                     <tr>
                         <th>Church Name</th>
-                        <th>Lead Minister</th>
+                        <th>Minister</th>
                         <th>Address</th>
                         <th>Actions</th>
                     </tr>
@@ -211,8 +191,8 @@
                  $(`#${tableId} tbody`).empty(); 
             }
             churchesDataTable = $(`#${tableId}`).DataTable({
-                "pageLength": 25,
-                "lengthMenu": [ [10, 25, 75, -1], [10, 25, 75, "All"] ],
+                "pageLength": -1,
+               // "lengthMenu": [ [10, 25, 75, -1], [10, 25, 75, "All"] ],
                 "destroy": true 
             });
         }
@@ -351,7 +331,7 @@
                 html += "<h5>Monthly Services</h5><p>No Nth weekday services listed.</p><hr>";
             }
 
-            // --- Display Monthly Relative Services (Title as Header) ---
+            // --- Display Monthly Relative Services (Title asHeader) ---
             if (monthlyRelativeServices.length > 0) {
                 const monthlyRelativeByTitle = {};
                 monthlyRelativeServices.forEach(s => {
@@ -401,34 +381,52 @@
             return hours * 60 + minutes; 
         }
 
-        function formatServiceRuleDescription(service, churchId, serviceHeaderTitle = "") {
-        let description = "";
-        let lowerServiceHeaderTitle = (serviceHeaderTitle || service.ServiceTitle || "").toLowerCase(); // Use service.ServiceTitle as fallback
+        function parseTime(timeString) { // Ensure this helper is present
+        if (!timeString || typeof timeString !== 'string' || timeString.trim() === "") return null;
+        const match = timeString.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+        if (!match) return null;
+        let hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const modifier = match[3] ? match[3].toUpperCase() : null;
+        if (modifier === "PM" && hours < 12) hours += 12;
+        if (modifier === "AM" && hours === 12) hours = 0;
+        return { hours, minutes };
+    }
 
-        // Default time and duration strings that will be used by some types
-        let timeText = service.Time ? ` at ${service.Time}` : ''; // Changed default for time
+
+function formatServiceRuleDescription(service, churchId, serviceHeaderTitle = "") {
+        let description = "";
+        // Use the service's own title for communion check if header title isn't passed reliably for this specific check
+        let lowerServiceOwnTitle = (service.ServiceTitle || "").toLowerCase(); 
+
+        let timeText = service.Time ? ` at ${service.Time}` : '';
         let durationText = service.DurationMinutes ? ` (${service.DurationMinutes} mins)` : '';
         
-        let communionText = "";
-        // Add communion text if applicable and not already indicated by the header title itself
+        let communionSuffix = ""; 
+        // Add communion suffix if IsCommunionFlag is true AND the ServiceTitle itself doesn't already say "Communion"
         if ((service.IsCommunionFlag === true || String(service.IsCommunionFlag).toLowerCase() === 'true') && 
-            !lowerServiceHeaderTitle.includes("communion")) {
-            communionText = " (Communion)";
+            !lowerServiceOwnTitle.includes("communion")) {
+            communionSuffix = " (Communion)";
         }
 
         if (service.RecurrenceType === 'MonthlyNthWeekday') {
             description = `The ${service.NthOccurrence || ''} ${service.DayOfWeek || ''} of the month`;
-            // For this type, time/duration are omitted from this line as per your previous request.
-            return `${description}${communionText}`; 
+            return `${description}${communionSuffix}`; // Time/duration previously removed for this type
 
         } else if (service.RecurrenceType === 'MonthlyRelativeToRule') {
-            // *** NEW: Special handling if the header title is "Communion" or "Communion Service" ***
-            if (lowerServiceHeaderTitle === 'communion' || lowerServiceHeaderTitle === 'communion service') {
-                return `${service.DayOfWeek || 'Day not specified'}`; // Just the day
+            // Check if THIS service's title is "Communion" or "Communion Service" for special formatting
+            if (lowerServiceOwnTitle === 'communion' || lowerServiceOwnTitle === 'communion service') {
+                let parsedTime = parseTime(service.Time);
+                if (parsedTime && parsedTime.hours >= 16) { // 4 PM (16:00) or later is "Evening"
+                    return `${service.DayOfWeek || 'Day not specified'} Evening`;
+                } else if (service.Time) { // It's communion, has a time, but not evening
+                    return `${service.DayOfWeek || 'Day not specified'} at ${service.Time}`;
+                } else { // It's communion, but no time specified in its row
+                     return `${service.DayOfWeek || 'Day not specified'}`;
+                }
             }
-            // *** END NEW ***
-
-            // Existing logic for other "MonthlyRelativeToRule" services
+            
+            // Logic for OTHER "MonthlyRelativeToRule" services (not titled "Communion/Communion Service")
             let baseRuleDesc = service.RelativeToServiceID || 'specified rule';
             if (typeof allServicesData !== 'undefined' && allServicesData.length > 0) {
                 const baseService = allServicesData.find(s_lookup => 
@@ -436,7 +434,7 @@
                     s_lookup.ChurchID === churchId 
                 );
                 if (baseService && baseService.ServiceTitle) {
-                    baseRuleDesc = `"${baseService.ServiceTitle}"`;
+                    baseRuleDesc = `"${baseService.ServiceTitle}" (${service.RelativeToServiceID})`; // Include ID for clarity
                 }
             }
             
@@ -449,20 +447,21 @@
             else if (offsetDays > 1) offsetDesc = `${offsetDays} days after`;
             else offsetDesc = ""; 
 
-            description = `${service.DayOfWeek || ''}${timeText}, ${offsetDesc} ${baseRuleDesc}`;
-            return `${description}${communionText}${durationText}`;
+            description = `${service.DayOfWeek || 'Day not specified'}${timeText}, ${offsetDesc} ${baseRuleDesc}`;
+            return `${description}${communionSuffix}${durationText}`;
 
         } else if (service.RecurrenceType === 'Weekly') {
-            // Weekly services are formatted directly in the main displayServicesInModal loop for grouping.
-            // This is a fallback if this helper is somehow called for a weekly type.
+            // Weekly services are now primarily formatted directly in displayServicesInModal.
+            // This is a fallback if this helper is called for a weekly type.
             description = `Every ${service.DayOfWeek || ''}${timeText}`;
-            return `${description}${communionText}${durationText}`;
+            return `${description}${communionSuffix}${durationText}`;
         } else {
-            // Fallback for any other unknown types
-            description = `Rule: ${service.RecurrenceRule || 'Not specified'}${timeText}`;
-            return `${description}${communionText}${durationText}`;
+            description = `Rule: ${service.RecurrenceRule || 'Not specified'}${timeText}`; // Fallback
+            return `${description}${communionSuffix}${durationText}`;
         }
     }
+
+
         async function geocodeAddressWithNominatim(address) {
             const encodedAddress = encodeURIComponent(address);
             const headers = new Headers({ 'User-Agent': 'ChurchDenominationMap/1.0 (ChurchApp@gmail.com)' }); // Replace with your info
