@@ -42,9 +42,9 @@ function processDataForCalendar() {
     const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
     const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false; 
 
-    console.log(`--- processDataForCalendar ---`);
-    console.log(`Show Expanded Series (Checkbox state): ${showExpandedSeries}`);
-    console.log(`Total items in allEventsData to process: ${allEventsData.length}`);
+    //console.log(`--- processDataForCalendar ---`);
+    //console.log(`Show Expanded Series (Checkbox state): ${showExpandedSeries}`);
+    //console.log(`Total items in allEventsData to process: ${allEventsData.length}`);
 
     allEventsData.forEach((event, index) => {
         if (!event || !event.EventTitle || !event.StartDate) {
@@ -57,7 +57,7 @@ function processDataForCalendar() {
         const isGeneratedInstance = String(event.isGeneratedInstance).toLowerCase() === "true";
 
         // Detailed log for each event before decision making
-        console.log(`Processing Event [${index}]: "${event.EventTitle}" -- IsSeriesParent_Raw: ${event.IsSeriesParent}, IsSeriesParent_Parsed: ${isSeriesParentEvent}, isGeneratedInstance_Raw: ${event.isGeneratedInstance}, isGeneratedInstance_Parsed: ${isGeneratedInstance}`);
+        //console.log(`Processing Event [${index}]: "${event.EventTitle}" -- IsSeriesParent_Raw: ${event.IsSeriesParent}, IsSeriesParent_Parsed: ${isSeriesParentEvent}, isGeneratedInstance_Raw: ${event.isGeneratedInstance}, isGeneratedInstance_Parsed: ${isGeneratedInstance}`);
 
         let fcStart = event.StartDate;
         let fcEnd = event.EndDate;
@@ -66,7 +66,7 @@ function processDataForCalendar() {
 
         if (isSeriesParentEvent) {
             if (!showExpandedSeries) { 
-                console.log(`  Action: Adding PARENT placeholder for "${event.EventTitle}"`);
+                //console.log(`  Action: Adding PARENT placeholder for "${event.EventTitle}"`);
                 let placeholderTitle = event.EventTitle;
                 if (event.EventType && !placeholderTitle.toLowerCase().includes(String(event.EventType).toLowerCase())) {
                     placeholderTitle = `${event.EventTitle} (${event.EventType} Series)`;
@@ -82,11 +82,11 @@ function processDataForCalendar() {
                     extendedProps: { ...event, isPlaceholder: true } 
                 });
             } else {
-                console.log(`  Action: SKIPPING Parent (because series are expanded) for "${event.EventTitle}"`);
+                //console.log(`  Action: SKIPPING Parent (because series are expanded) for "${event.EventTitle}"`);
             }
         } else if (isGeneratedInstance) {
             if (showExpandedSeries) { 
-                console.log(`  Action: Adding GENERATED instance for "${event.EventTitle}"`);
+                //console.log(`  Action: Adding GENERATED instance for "${event.EventTitle}"`);
                 if (isAllDay) { 
                     if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
                     if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
@@ -100,10 +100,10 @@ function processDataForCalendar() {
                     extendedProps: { ...event }
                 });
             } else {
-                console.log(`  Action: SKIPPING Generated instance (because series are collapsed) for "${event.EventTitle}"`);
+               // console.log(`  Action: SKIPPING Generated instance (because series are collapsed) for "${event.EventTitle}"`);
             }
         } else { 
-            console.log(`  Action: Adding SINGLE event "${event.EventTitle}" (IsParent: ${isSeriesParentEvent}, IsInstance: ${isGeneratedInstance})`);
+            //console.log(`  Action: Adding SINGLE event "${event.EventTitle}" (IsParent: ${isSeriesParentEvent}, IsInstance: ${isGeneratedInstance})`);
             if (isAllDay) {
                 if (fcStart && typeof fcStart === 'string' && fcStart.includes('T')) fcStart = fcStart.substring(0, 10);
                 if (fcEnd && typeof fcEnd === 'string' && fcEnd.includes('T')) fcEnd = fcEnd.substring(0, 10);
@@ -118,7 +118,7 @@ function processDataForCalendar() {
             });
         }
     });
-    console.log(`Total events prepared for calendar display: ${processedEvents.length}`);
+    //console.log(`Total events prepared for calendar display: ${processedEvents.length}`);
     return processedEvents;
 }
 
@@ -143,10 +143,10 @@ async function initializeApp() {
         allGroupsData = guestParticipants || []; 
         allServiceSchedulePatterns = servicePatterns || []; 
         allGroupMembersData = groupMembers || []; // <-- ADD THIS LINE
-
+/*
         console.log("Fetched allEventsData count in initializeApp:", allEventsData.length);
         if (allEventsData.length > 0) {
-            console.log("Sample event data item 0 from allEventsData:", JSON.stringify(allEventsData[0]));
+            //console.log("Sample event data item 0 from allEventsData:", JSON.stringify(allEventsData[0]));
             const seriesParentExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() === "true");
             if(seriesParentExample) console.log("Sample series parent from allEventsData:", JSON.stringify(seriesParentExample));
             const generatedInstanceExample = allEventsData.find(ev => String(ev.isGeneratedInstance).toLowerCase() === "true");
@@ -154,7 +154,7 @@ async function initializeApp() {
             const singleEventExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() !== "true" && String(ev.isGeneratedInstance).toLowerCase() !== "true");
             if(singleEventExample) console.log("Sample single event from allEventsData:", JSON.stringify(singleEventExample));
         }
-
+*/
 
         populateFilterDropdowns();
         applyFilters(); 
@@ -433,6 +433,52 @@ function applyFilters() {
         if (loadingIndicator) loadingIndicator.style.display = 'none';
     }, 10);
 }
+function parseSimpleTimeForSort(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!match) return null;
+    
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const modifier = match[3] ? match[3].toUpperCase() : null;
+    
+    if (modifier === "PM" && hours < 12) {
+        hours += 12;
+    } else if (modifier === "AM" && hours === 12) { // Midnight case: 12 AM is 00 hours
+        hours = 0;
+    }
+    
+    return hours * 60 + minutes;
+}
+function getBestTimeZoneAbbreviation(date, timeZone) {
+  try {
+    // Use the modern Intl.DateTimeFormat API to get structured parts.
+    const options = { timeZone: timeZone, timeZoneName: 'short' };
+    const formatter = new Intl.DateTimeFormat('en-US', options);
+    const parts = formatter.formatToParts(date);
+    const tzPart = parts.find(part => part.type === 'timeZoneName');
+
+    if (tzPart && tzPart.value) {
+      // For major US zones, this is usually reliable (e.g., "CDT", "EDT")
+      // and we prefer it over a generic "CT" or "ET".
+      if (['CDT', 'CST', 'EDT', 'EST', 'MDT', 'MST', 'PDT', 'PST'].includes(tzPart.value)) {
+        return tzPart.value;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not format timezone with Intl API, using fallback.", e);
+  }
+
+  // If the above fails or the browser gives a generic value, use a manual fallback.
+  // This part is less accurate for DST but provides a good user-facing label.
+  if (timeZone === 'America/New_York') return 'ET'; // Eastern Time
+  if (timeZone === 'America/Chicago') return 'CT'; // Central Time
+  if (timeZone === 'America/Denver') return 'MT'; // Mountain Time
+  if (timeZone === 'America/Los_Angeles') return 'PT'; // Pacific Time
+  
+  // Final fallback to the full name if it's an unknown zone
+  return timeZone.replace(/_/g, " ");
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     var calendarEl = document.getElementById('calendar');
@@ -476,159 +522,140 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         },
         eventClick: function(info) {
-            if (!eventDetailModalInstance) {
-                alert(`Event: ${info.event.title}\nStart: ${info.event.start ? info.event.start.toLocaleString() : 'N/A'}`);
-                return;
-            }
+    if (!eventDetailModalInstance) {
+        alert(`Event: ${info.event.title}\nStart: ${info.event.start ? info.event.start.toLocaleString() : 'N/A'}`);
+        return;
+    }
 
-            const props = info.event.extendedProps || {};
-            const eventTitle = info.event.title || "Event Details";
-            let detailsHtml = `<h4>${eventTitle}</h4>`;
-            
-            const displayTimeZone = props.eventActualTimeZone || 'UTC'; 
-            let timeZoneAbbreviation = ''; // To store CDT, EDT, etc.
+    const props = info.event.extendedProps || {};
+    const eventTitle = info.event.title || "Event Details";
+    let detailsHtml = `<h4>${eventTitle}</h4>`;
+    
+    const displayTimeZone = props.eventActualTimeZone || 'UTC'; 
+    let timeZoneAbbreviation = '';
 
-            if (info.event.start) {
-                let startDisplayStr = '';
-                try {
-                    const eventDateObj = info.event.start; 
-                    const datePartModal = eventDateObj.toLocaleDateString('en-US', { timeZone: displayTimeZone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                    let timePartModal = "";
-                    if (!info.event.allDay) { 
-                         // Get time with abbreviation
-                         const timeWithAbbr = eventDateObj.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric', timeZoneName: 'short'});
-                         timePartModal = timeWithAbbr;
-                         // Extract abbreviation if needed elsewhere, though it's part of timeWithAbbr
-                         const parts = timeWithAbbr.split(' ');
-                         if (parts.length > 2) timeZoneAbbreviation = parts.pop(); // Get last part like CDT/EDT
-                    }
-                    startDisplayStr = `${datePartModal}${timePartModal ? ' at ' + timePartModal : ''}`;
-                } catch (e) {
-                    console.error("Error formatting start date for modal:", e);
-                    startDisplayStr = info.event.start.toLocaleString(); 
-                }
-                detailsHtml += `<p><strong>When:</strong> ${startDisplayStr}</p>`;
-                const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                if (displayTimeZone !== browserTimeZone && displayTimeZone !== 'UTC' && !info.event.allDay) {
-                    detailsHtml += `<p><small>(Your local time: ${info.event.start.toLocaleString()})</small></p>`;
-                }
-            } else { detailsHtml += `<p><strong>Date:</strong> N/A</p>`; }
+    if (info.event.start) {
+        const eventDateObj = info.event.start;
+        // *** Use our new, more reliable helper function ***
+        timeZoneAbbreviation = getBestTimeZoneAbbreviation(eventDateObj, displayTimeZone);
 
-            if (info.event.end && !info.event.allDay) { 
-                 let endDisplayStr = '';
-                 try {
-                    const eventEndDateObj = info.event.end;
-                    endDisplayStr = eventEndDateObj.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric', timeZoneName: 'short'});
-                 } catch (e) {
-                    console.error("Error formatting end date for modal:", e);
-                    endDisplayStr = info.event.end.toLocaleTimeString();
-                 }
-                 detailsHtml += `<p><strong>End:</strong> ${endDisplayStr}</p>`;
-            }
-            
-            detailsHtml += `<p><strong>Type:</strong> ${props.EventType || 'N/A'}</p>`;
-
-            // --- SCHEDULE (from patterns) / DESCRIPTION DISPLAY ---
-            const originalEventID = props.EventID; 
-            const patternsForThisEvent = allServiceSchedulePatterns.filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
-
-            if (patternsForThisEvent.length > 0) {
-                detailsHtml += `<p><strong>Schedule (${timeZoneAbbreviation || displayTimeZone.replace(/_/g," ")}):</strong></p>`; // Add TZ info to schedule header
-                const patternsByDay = {};
-                patternsForThisEvent.forEach(p => {
-                    if(!p.DayOfWeek) return;
-                    if(!patternsByDay[p.DayOfWeek]) patternsByDay[p.DayOfWeek] = [];
-                    patternsByDay[p.DayOfWeek].push(p);
-                });
-
-                const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Weekdays"];
-                let scheduleContent = "";
-                dayOrder.forEach(dayKey => {
-                    if (patternsByDay[dayKey] && patternsByDay[dayKey].length > 0) {
-                        scheduleContent += `<ul><li><strong>${dayKey}:</strong></li><ul>`;
-                        patternsByDay[dayKey].sort((a,b) => { 
-                            const timeA = (a.ServiceStartTime || "").toUpperCase().includes("PM") ? 1200 + parseInt((a.ServiceStartTime || "0:0").replace(/\D/g,'')) : parseInt((a.ServiceStartTime || "0:0").replace(/\D/g,''));
-                            if ((a.ServiceStartTime || "").toUpperCase().includes("AM") && (a.ServiceStartTime || "").startsWith("12")) timeA -= 1200;
-                            const timeB = (b.ServiceStartTime || "").toUpperCase().includes("PM") ? 1200 + parseInt((b.ServiceStartTime || "0:0").replace(/\D/g,'')) : parseInt((b.ServiceStartTime || "0:0").replace(/\D/g,''));
-                            if ((b.ServiceStartTime || "").toUpperCase().includes("AM") && (b.ServiceStartTime || "").startsWith("12")) timeB -= 1200;
-                            return timeA - timeB;
-                        }).forEach(p => {
-                            // Append abbreviation to pattern times if available
-                            let patternTimeDisplay = p.ServiceStartTime || '';
-                            if (p.ServiceEndTime) patternTimeDisplay += ` - ${p.ServiceEndTime}`;
-                            scheduleContent += `<li>${patternTimeDisplay || 'N/A'}: ${p.ServiceSubTitle || p.EventType || 'Service'}</li>`;
-                        });
-                        scheduleContent += `</ul></ul>`;
-                    }
-                });
-                 if (scheduleContent === "") scheduleContent = "<p><em>No detailed schedule patterns found for this event's ID.</em></p>";
-                detailsHtml += scheduleContent;
-            }
-            
-            let descriptionText = props.Description || 'None';
-            if (typeof descriptionText === 'string') {
-                descriptionText = descriptionText.replace(/\n/g, '<br>');
-            }
-            if (patternsForThisEvent.length > 0 && props.Description && props.Description.trim() !== "") {
-                 detailsHtml += `<h6 class="mt-3">Additional Details:</h6><p>${descriptionText}</p>`;
-            } else if (descriptionText !== 'None' && descriptionText.trim() !== "") {
-                 detailsHtml += `<p><strong>Description:</strong><br>${descriptionText}</p>`;
-            } else if (patternsForThisEvent.length === 0) { 
-                 detailsHtml += `<p><strong>Description:</strong> None</p>`;
-            }
-            // --- END SCHEDULE / DESCRIPTION DISPLAY ---
-
-            const church = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(props.ChurchID).trim());
-            if (church) { 
-                detailsHtml += `<p><strong>Church:</strong> ${church.ChurchName||'N/A'}</p>`;
-                detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||church.Address||'N/A'}</p>`;
-            }
-
-            const participantsForEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
-            if (participantsForEvent.length > 0) {
-                detailsHtml += `<p><strong>Featuring:</strong></p><ul>`;
-                participantsForEvent.forEach(participant => {
-                    if(!participant) return; 
-                    let name = null; 
-                    let role = participant.RoleInEvent ? String(participant.RoleInEvent).trim() : ''; 
-                    let pChurchName = null; 
-                    let groupMembersHtml = '';
-
-                    if (participant.MinisterID) { 
-                        const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
-                        if (minister) { 
-                            name = minister.Name ? String(minister.Name).trim() : 'M. Name?'; 
-                            pChurchName = minister.ChurchName ? String(minister.ChurchName).trim() : null;
-                        } else { name = 'M. ID?'; }
-                    } else if (participant.GroupID && allGroupsData && allGroupsData.length > 0) { 
-                        const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
-                        if (group) { 
-                            name = group.GroupName ? String(group.GroupName).trim() : 'G. Name?'; 
-                            if (group.AssociatedChurchID && allChurchesData) { 
-                                const c = allChurchesData.find(ch => ch && String(ch.ChurchID).trim() === String(group.AssociatedChurchID).trim()); 
-                                if (c) pChurchName = c.ChurchName ? String(c.ChurchName).trim() : null;
-                            }
-                            if (allGroupMembersData && allGroupMembersData.length > 0) {
-                                const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
-                                if (members.length > 0) {
-                                    groupMembersHtml = '<br/><small>Members:<ul>';
-                                    members.forEach(member => {
-                                        groupMembersHtml += `<li><small>${member.MemberName || 'Unknown Member'}</small></li>`;
-                                    });
-                                    groupMembersHtml += '</ul></small>';
-                                }
-                            }
-                        } else { name = 'G. ID?'; }
-                    } else if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") { 
-                        name = String(participant.ParticipantNameOverride).trim(); 
-                    }
-                    detailsHtml += `<li>${name||'N/A'} ${pChurchName?`[${pChurchName}]`:''} ${role?`(${role})`:''} ${groupMembersHtml}</li>`;
-                });
-                detailsHtml += `</ul>`;
-            }
-            document.getElementById('eventDetailBody').innerHTML = detailsHtml;
-            if(eventDetailModalInstance) eventDetailModalInstance.show();
+        const datePartModal = eventDateObj.toLocaleDateString('en-US', { timeZone: displayTimeZone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        let timePartModal = "";
+        
+        if (!info.event.allDay) { 
+             timePartModal = eventDateObj.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric'});
         }
+
+        const startDisplayStr = `${datePartModal}${timePartModal ? ' at ' + timePartModal : ''} ${timeZoneAbbreviation}`;
+        detailsHtml += `<p><strong>When:</strong> ${startDisplayStr}</p>`;
+        
+        const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (displayTimeZone !== browserTimeZone && !info.event.allDay) {
+            detailsHtml += `<p><small>(Your local time: ${info.event.start.toLocaleString()})</small></p>`;
+        }
+    } else { 
+        detailsHtml += `<p><strong>Date:</strong> N/A</p>`; 
+    }
+
+    if (info.event.end && !info.event.allDay) {
+        const endDisplayStr = info.event.end.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric'});
+        detailsHtml += `<p><strong>End:</strong> ${endDisplayStr} ${timeZoneAbbreviation}</p>`;
+    }
+    
+    detailsHtml += `<p><strong>Type:</strong> ${props.EventType || 'N/A'}</p>`;
+
+    // --- SCHEDULE (from patterns) / DESCRIPTION DISPLAY ---
+    const originalEventID = props.EventID;
+    const patternsForThisEvent = allServiceSchedulePatterns.filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
+
+    if (patternsForThisEvent.length > 0) {
+        detailsHtml += `<p><strong>Schedule (${timeZoneAbbreviation}):</strong></p>`; // Use the reliable abbreviation
+        const patternsByDay = {};
+        patternsForThisEvent.forEach(p => {
+            if(!p.DayOfWeek) return;
+            if(!patternsByDay[p.DayOfWeek]) patternsByDay[p.DayOfWeek] = [];
+            patternsByDay[p.DayOfWeek].push(p);
+        });
+
+        const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Weekdays"];
+        let scheduleContent = "<ul>";
+        dayOrder.forEach(dayKey => {
+            if (patternsByDay[dayKey] && patternsByDay[dayKey].length > 0) {
+                scheduleContent += `<li><strong>${dayKey}:</strong><ul>`;
+                patternsByDay[dayKey]
+                    .sort((a,b) => (parseSimpleTimeForSort(a.ServiceStartTime) || 0) - (parseSimpleTimeForSort(b.ServiceStartTime) || 0)) // Using your existing time sort function
+                    .forEach(p => {
+                        let patternTimeDisplay = p.ServiceStartTime || '';
+                        if (p.ServiceEndTime) patternTimeDisplay += ` - ${p.ServiceEndTime}`;
+                        scheduleContent += `<li>${patternTimeDisplay || 'N/A'}: ${p.ServiceSubTitle || 'Service'}</li>`;
+                    });
+                scheduleContent += `</ul></li>`;
+            }
+        });
+        scheduleContent += "</ul>";
+        detailsHtml += scheduleContent;
+    }
+    
+    let descriptionText = (props.Description || '').replace(/\n/g, '<br>');
+    if (descriptionText.trim() !== "") {
+        detailsHtml += `<h6 class="mt-3">Additional Details:</h6><p>${descriptionText}</p>`;
+    } else if (patternsForThisEvent.length === 0) { 
+        detailsHtml += `<p><strong>Description:</strong> None</p>`;
+    }
+    
+    // ... (The rest of your eventClick function for Church and Participants remains the same) ...
+    const church = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(props.ChurchID).trim());
+    if (church) { 
+        detailsHtml += `<p><strong>Church:</strong> ${church.ChurchName||'N/A'}</p>`;
+        detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||church.Address||'N/A'}</p>`;
+    }
+
+    const participantsForEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
+    if (participantsForEvent.length > 0) {
+      // (Your existing participant logic goes here, it does not need to change)
+        detailsHtml += `<p><strong>Featuring:</strong></p><ul>`;
+        participantsForEvent.forEach(participant => {
+            if(!participant) return; 
+            let name = null; 
+            let role = participant.RoleInEvent ? String(participant.RoleInEvent).trim() : ''; 
+            let pChurchName = null; 
+            let groupMembersHtml = '';
+            if (participant.MinisterID) { 
+                const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
+                if (minister) { 
+                    name = minister.Name ? String(minister.Name).trim() : 'M. Name?'; 
+                    pChurchName = minister.ChurchName ? String(minister.ChurchName).trim() : null;
+                } else { name = 'M. ID?'; }
+            } else if (participant.GroupID && allGroupsData && allGroupsData.length > 0) { 
+                const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
+                if (group) { 
+                    name = group.GroupName ? String(group.GroupName).trim() : 'G. Name?'; 
+                    if (group.AssociatedChurchID && allChurchesData) { 
+                        const c = allChurchesData.find(ch => ch && String(ch.ChurchID).trim() === String(group.AssociatedChurchID).trim()); 
+                        if (c) pChurchName = c.ChurchName ? String(c.ChurchName).trim() : null;
+                    }
+                    if (allGroupMembersData && allGroupMembersData.length > 0) {
+                        const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
+                        if (members.length > 0) {
+                            groupMembersHtml = '<br/><small>Members:<ul>';
+                            members.forEach(member => {
+                                groupMembersHtml += `<li><small>${member.MemberName || 'Unknown Member'}</small></li>`;
+                            });
+                            groupMembersHtml += '</ul></small>';
+                        }
+                    }
+                } else { name = 'G. ID?'; }
+            } else if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") { 
+                name = String(participant.ParticipantNameOverride).trim(); 
+            }
+            detailsHtml += `<li>${name||'N/A'} ${pChurchName?`[${pChurchName}]`:''} ${role?`(${role})`:''} ${groupMembersHtml}</li>`;
+        });
+        detailsHtml += `</ul>`;
+    }
+    
+    document.getElementById('eventDetailBody').innerHTML = detailsHtml;
+    if(eventDetailModalInstance) eventDetailModalInstance.show();
+}
     });
     calendar.render();
     initializeApp();
