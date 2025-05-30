@@ -22,7 +22,7 @@ let activeFilters = {
 
 async function fetchData(sheetName) {
     try {
-        const response = await fetch(`${SCRIPT_URL}?sheet=${sheetName}`);
+        const response = await fetch(`${SCRIPT_URL}?action=getSheetData&sheet=${sheetName}`);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for sheet ${sheetName}`);
         const result = await response.json();
         if (result.error) {
@@ -32,6 +32,11 @@ async function fetchData(sheetName) {
         return result.data || [];
     } catch (error) {
         console.error(`Error fetching ${sheetName}:`, error);
+        const errorContainer = document.getElementById('error-container');
+        if (errorContainer) {
+            errorContainer.textContent = `Failed to load data for: ${sheetName}. Please refresh. Error: ${error.message}`;
+            errorContainer.style.display = 'block';
+        }
         return [];
     }
 }
@@ -479,8 +484,40 @@ function getBestTimeZoneAbbreviation(date, timeZone) {
   // Final fallback to the full name if it's an unknown zone
   return timeZone.replace(/_/g, " ");
 }
+async function populateNavbar() {
+    try {
+        const response = await fetch(`${SCRIPT_URL}?action=getNav`);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status} for getNav`);
+        const result = await response.json();
+        if (result.error) throw new Error(result.error);
+        
+        const links = result.data;
+        const navLinksContainer = document.getElementById('dynamicNavLinks');
+        if (!navLinksContainer || !links) return;
+
+        links.forEach(link => {
+            const li = document.createElement('li');
+            li.className = 'nav-item';
+            
+            const a = document.createElement('a');
+            a.className = 'nav-link';
+            a.href = link.url;
+            a.textContent = link.title;
+            // Optional: Open external links in a new tab (adjust your base URL)
+            if (!link.url.startsWith('https://d3rkrox.github.io')) { 
+               a.target = '_blank';
+            }
+            li.appendChild(a);
+            navLinksContainer.appendChild(li);
+        });
+    } catch (e) {
+        console.error("Could not populate navbar:", e);
+        // Optionally display an error to the user in the navbar area
+    }
+}
 
 document.addEventListener('DOMContentLoaded', function() {
+    populateNavbar();
     var calendarEl = document.getElementById('calendar');
     if (!calendarEl) { console.error("Calendar #calendar not found!"); return; }
     if (typeof FullCalendar === 'undefined') { console.error("FullCalendar library not loaded!"); return; }

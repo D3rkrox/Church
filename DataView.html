@@ -11,7 +11,8 @@
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
     <style>
-        body { padding: 20px; font-family: Arial, sans-serif; }
+    /* Your existing styles are preserved */
+        body { padding-top: 56px; /* Add padding to body to offset fixed navbar */ font-family: Arial, sans-serif; }
         .container-fluid { max-width: 1140px; }
         .section-header { margin-top: 30px; margin-bottom: 15px; }
         table.dataTable th { background-color: #e9ecef; cursor: pointer; }
@@ -53,10 +54,21 @@
     </style>
 </head>
 <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">Church App</a>
+        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="mainNavbar">
+          <ul class="navbar-nav ml-auto" id="dynamicNavLinks">
+              </ul>
+        </div>
+      </div>
+    </nav>
     <div class="container-fluid">
         <header class="my-4 text-center">
             <h1>Church Information & Regular Services</h1>
-            <p><a href="index.html">Back to Main Calendar</a></p> 
         </header>
 
         <div id="statusMessage" style="display: none;"></div>
@@ -132,6 +144,37 @@
         let leafletMap; 
         let leafletMarkers = []; // Keep track of markers to manage them
 
+        async function populateNavbar() {
+            try {
+                const response = await fetch(`${SCRIPT_API_URL}?action=getNav`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                
+                const links = result.data;
+                const navLinksContainer = document.getElementById('dynamicNavLinks');
+                if (!navLinksContainer || !links) return;
+
+                links.forEach(link => {
+                    const li = document.createElement('li');
+                    li.className = 'nav-item';
+                    
+                    const a = document.createElement('a');
+                    a.className = 'nav-link';
+                    a.href = link.url;
+                    a.textContent = link.title;
+                    // Adjust your base URL if it's different
+                    if (!link.url.startsWith('https://d3rkrox.github.io')) { 
+                       a.target = '_blank';
+                    }
+                    li.appendChild(a);
+                    navLinksContainer.appendChild(li);
+                });
+            } catch (e) {
+                console.error("Could not populate navbar:", e);
+            }
+        }
+
         function displayStatus(message, isError = false, autoClear = true) {
             const statusMsg = document.getElementById("statusMessage");
             if (!statusMsg) return;
@@ -150,7 +193,7 @@
         }
         async function fetchSheetDataForStaticPage(sheetName) {
             try {
-                const response = await fetch(`${SCRIPT_API_URL}?sheet=${sheetName}`);
+                const response = await fetch(`${SCRIPT_API_URL}?action=getSheetData&sheet=${sheetName}`);
                 if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} for ${sheetName}`);
                 const result = await response.json();
                 if (result.error) throw new Error(`API error for ${sheetName}: ${result.error}`);
@@ -169,7 +212,7 @@
             }
             churchesDataTable = $(`#${tableId}`).DataTable({
                 "pageLength": 25,
-                "lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+                "lengthMenu": [ [10, 25, 75, -1], [10, 25, 75, "All"] ],
                 "destroy": true 
             });
         }
@@ -479,6 +522,7 @@
         }
 
         window.onload = function() {
+            populateNavbar();
             if(typeof $ !== 'undefined' && $.fn.DataTable && typeof L !== 'undefined') {
                 loadInitialData();
             } else { 

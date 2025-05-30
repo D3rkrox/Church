@@ -12,15 +12,17 @@
         }
         body { 
             font-family: Arial, sans-serif; 
-            padding-top: 15px;
+            padding-top: 0; /* Adjusted for fixed navbar */
             padding-bottom: 15px;
-            display: flex; /* Use flexbox for overall page structure */
-            flex-direction: column;
+        }
+        .navbar { /* Ensure navbar is sticky or fixed if you want it always visible */
+            /* Example: position: sticky; top: 0; z-index: 1030; */
         }
         .container { 
             max-width: 1140px; 
             padding-left: 15px;
             padding-right: 15px;
+            margin-top: 20px; /* Add margin if navbar is fixed/sticky */
         }
         header h1 {
             font-size: 1.75rem;
@@ -167,18 +169,18 @@
     </style>
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="#">Church App</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav ms-auto" id="dynamicNavLinks">
-                </ul>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Church App</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav ms-auto" id="dynamicNavLinks">
+                    </ul>
+            </div>
         </div>
-    </div>
-</nav>
+    </nav>
     <div class="container">
         <header class="my-3 text-center"> 
             <h1>Church Events</h1>
