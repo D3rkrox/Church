@@ -95,9 +95,16 @@
         }
 
         @media (max-width: 767.98px) { 
+            html {
+                height: 100%; /* Ensure html tag itself uses full viewport height */
+            }
             body {
-                padding-top: 0; /* Adjusted for fixed navbar */
-                padding-bottom: 10px;
+                min-height: 100%; /* Make body at least full viewport height */
+                display: flex;
+                flex-direction: column;
+            }
+            .navbar.sticky-top {
+                flex-shrink: 0; /* Prevent the navbar from shrinking when body is a flex container */
             }
             .container {
                 flex-grow: 1; /* Allow container to fill body height */
@@ -106,6 +113,7 @@
                 height: 100%; /* Occupy full height of flex parent (body) */
                 max-height: 100vh; /* Ensure it doesn't exceed viewport due to body padding */
                 box-sizing: border-box;
+                overflow: hidden;
             }
             header h1 {
                 font-size: 1.5rem; 
@@ -129,7 +137,8 @@
                 flex-grow: 1; /* Main section will take up remaining vertical space */
                 display: flex;
                 flex-direction: column;
-                min-height: 250px; /* Ensure calendar has some minimum space */
+                min-height: 0; /* CRITICAL: Allows inner flex items (like #calendar) to shrink if needed and grow correctly */
+                overflow-y: auto;
             }
             #calendar {
                 flex-grow: 1; /* Calendar div itself grows to fill main */
@@ -164,6 +173,23 @@
             .fc .fc-prev-button, .fc .fc-next-button, .fc .fc-today-button {
                 /* Optionally give prev/next/today more prominence or specific styling if needed */
             }
+            #filterCollapse {
+                margin-top: 1rem; /* Your existing style */
+
+                /* --- NEW STYLES TO ADD --- */
+                max-height: 35vh;   /* Limit height to 35% of the viewport height. Adjust as needed. */
+                                    /* Alternatively, use a fixed pixel value like: max-height: 200px; */
+                overflow-y: auto;   /* Add a vertical scrollbar if content overflows */
+                padding: 1rem;      /* Add some internal padding to the scrollable area */
+                border: 1px solid #dee2e6; /* Optional: adds a light border around the scrollable filter area */
+                border-top: none; /* Optional: remove top border if filters-header already has bottom border */
+                border-radius: 0 0 .375rem .375rem; /* Optional: round bottom corners if using border */
+            }
+
+            /* Optional: If you added the border above and have specific margin on the inner row */
+            #filterCollapse .row.g-3.mt-2 {
+                margin-top: 0 !important; /* Reset top margin if padding is now on #filterCollapse */
+            }
         }
 
     </style>
@@ -195,7 +221,7 @@
 -->
         <div id="loading-indicator" style="display: none;">Loading events... please wait.</div>
         <div id="error-container" class="alert alert-danger" style="display: none;"></div>
-
+<!--
         <aside id="filters" class="mb-3"> 
             <div class="filters-header">
                 <h2>Filters</h2>
@@ -237,7 +263,55 @@
                 </div>
             </div>
         </aside>
+    -->
+        <aside id="filters" class="mb-3">
+            <div class="filters-header">
+                <h2>Filters</h2>
+                <button class="btn btn-outline-secondary btn-sm" type="button" 
+                        data-bs-toggle="offcanvas" data-bs-target="#filtersOffcanvas" 
+                        aria-controls="filtersOffcanvas">
+                    Show Filters
+                </button>
+            </div>
+        </aside>
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="filtersOffcanvas" aria-labelledby="filtersOffcanvasLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title" id="filtersOffcanvasLabel">Filter Events</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div class="form-check mt-3 mb-2">
+                <input class="form-check-input" type="checkbox" value="" id="expandSeriesFilter">
+                <label class="form-check-label" for="expandSeriesFilter">
+                    Show Detailed Series Schedules
+                </label>
+            </div>
 
+            <div class="row g-3 mt-2">
+                <div class="col-12 filter-item mb-3"> 
+                    <label for="eventTypeFilter" class="form-label">Add Event Type Filter:</label>
+                    <select id="eventTypeFilter" class="form-select form-select-sm">
+                        <option value="">-- Select Type --</option>
+                    </select>
+                </div>
+                <div class="col-12 filter-item mb-3"> 
+                    <label for="churchFilter" class="form-label">Add Church Filter:</label>
+                    <select id="churchFilter" class="form-select form-select-sm">
+                        <option value="">-- Select Church --</option>
+                    </select>
+                </div>
+                <div class="col-12 filter-item mb-3"> 
+                    <label for="participantFilter" class="form-label">Add Minister/Group Filter:</label>
+                    <select id="participantFilter" class="form-select form-select-sm">
+                        <option value="">-- Select Participant --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="activeFiltersContainer" class="mt-3">
+                </div>
+        </div>
+    </div>
         <main>
             <div id='calendar'></div>
         </main>
