@@ -30,7 +30,17 @@
         #mapModalLeaflet .modal-dialog { max-width: 90%; } 
         #mapCanvasLeaflet { height: 70vh; width: 100%; border: 1px solid #ccc; } 
         .map-controls { margin-bottom: 15px; text-align: center; }
-        
+            .btn-notification-bubble {
+        font-size: 0.65rem;     /* Makes the font inside the bubble smaller */
+        padding: 0.25em 0.5em;  /* Adjust padding to control bubble size; aim for circular with 1-2 digits */
+        line-height: 1;         /* Ensures text is centered vertically */
+        /* Bootstrap's 'badge rounded-pill bg-danger' will handle shape and color */
+    }
+
+    /* Optional: Adjust padding slightly if the count is high, e.g., for "99+" */
+    .btn-notification-bubble.high-count {
+        padding: 0.25em 0.4em;
+    }
     </style>
 </head>
 <body>
@@ -226,7 +236,36 @@
                     
                     const actionsCell = row.insertCell();
                     const churchNameAttr = church.ChurchName ? church.ChurchName.replace(/"/g, '&quot;') : 'Selected Church'; // Sanitize for attribute
-                    actionsCell.innerHTML = `<button type="button" class="btn btn-sm btn-info view-services-btn" data-churchid="${church.ChurchID || ''}" data-churchname="${churchNameAttr}">View Services</button>`;
+                    const upcomingEventCount = getUpcomingSpecialEventCountForChurch(church.ChurchID);
+                    /*
+                    let buttonClass = "btn-info"; // Default button color
+                    let buttonText = "View Services";
+
+                    if (upcomingEventCount > 0) {
+                        buttonClass = "btn-success"; // Change color if there are upcoming events
+                        buttonText += ` <span class="badge bg-light text-dark ms-1">${upcomingEventCount}</span>`; // Add badge
+                    }
+                    actionsCell.innerHTML = `<button type="button" class="btn btn-sm ${buttonClass} view-services-btn" data-churchid="${church.ChurchID}" data-churchname="${churchNameAttr}">${buttonText}</button>`;
+                    //actionsCell.innerHTML = `<button type="button" class="btn btn-sm btn-info view-services-btn" data-churchid="${church.ChurchID || ''}" data-churchname="${churchNameAttr}">View Services</button>`;
+                    */
+                   let buttonClasses = "btn btn-sm btn-info view-services-btn";
+                    if (upcomingEventCount > 0) {
+                        buttonClasses += " position-relative"; // Needed for absolute positioning of the bubble
+                    }
+
+                    let buttonHtml = `<button type="button" class="${buttonClasses}" data-churchid="${church.ChurchID}" data-churchname="${churchNameAttr}">View Services`;
+
+                    if (upcomingEventCount > 0) {
+                        const displayCount = upcomingEventCount > 99 ? "99+" : upcomingEventCount;
+                        const countClass = upcomingEventCount > 9 ? "high-count" : ""; // Optional class for higher counts
+                        buttonHtml += `
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger btn-notification-bubble ${countClass}">
+                                ${displayCount}
+                            </span>
+                        `;
+                    }
+                    buttonHtml += `</button>`;
+                    actionsCell.innerHTML = buttonHtml;
                 });
                 initializeDataTable('churchesInfoTable'); 
                 attachServiceButtonListeners();
@@ -441,7 +480,52 @@
         modalBody.innerHTML = html;
         $('#servicesModal').modal('show');
     }
-        
+    function getUpcomingSpecialEventCountForChurch(churchId) {
+        if (!allSpecialEventsData || !allChurchesData) return 0; // Ensure necessary data is loaded
+
+        const specialEventTypesToCount = ["revival", "singing", "fundraiser"]; 
+
+        const specialEventsForThisChurch = allSpecialEventsData.filter(event =>
+            event &&
+            String(event.ChurchID).trim() === String(churchId).trim() &&
+            specialEventTypesToCount.includes(String(event.EventType || "").trim().toLowerCase()) &&
+            (String(event.isGeneratedInstance).toLowerCase() !== 'true') // Consider only parent series or single events
+        );
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Today at midnight in local timezone
+        let count = 0;
+
+        specialEventsForThisChurch.forEach(event => {
+            if (!event.StartDate) return;
+
+            const eventStart = new Date(event.StartDate); // Converts UTC ISO string to local Date object
+            const eventEnd = event.EndDate ? new Date(event.EndDate) : new Date(eventStart);
+            const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
+
+            const eventStartDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+            
+            let eventLastDayInclusive;
+            if (isAllDay) {
+                let exclusiveEndLocal = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                eventLastDayInclusive = new Date(exclusiveEndLocal.setDate(exclusiveEndLocal.getDate() - 1));
+            } else {
+                eventLastDayInclusive = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+            }
+            if (eventLastDayInclusive < eventStartDateOnly) { // Handle single-day timed events where end date might be same as start date
+                 eventLastDayInclusive = new Date(eventStartDateOnly);
+            }
+
+            const isOngoing = (today.getTime() >= eventStartDateOnly.getTime() && today.getTime() <= eventLastDayInclusive.getTime());
+            const isFuture = (eventStartDateOnly.getTime() > today.getTime());
+
+            if (isOngoing || isFuture) {
+                count++;
+            }
+        });
+        return count;
+    }
+
         function parseSimpleTimeForSort(timeStr) { 
             if (!timeStr || typeof timeStr !== 'string') return null;
             const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
