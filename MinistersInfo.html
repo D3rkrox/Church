@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minister Directory & Revivals</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+    <style>
+        body { 
+            padding-top: 70px; /* Adjust for fixed-top navbar height */
+            font-family: Arial, sans-serif; 
+            background-color: #f8f9fa;
+        }
+        .container { 
+            background-color: #fff; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        table.dataTable th { 
+            background-color: #e9ecef; 
+            cursor: pointer; 
+        }
+        .modal-body ul { list-style-type: none; padding-left: 0; }
+        .modal-body li { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .modal-body li:last-child { border-bottom: none; }
+        .event-title { font-weight: bold; }
+        .event-details { font-size: 0.9rem; color: #555; }
+        #statusMessage { margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Church App</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar" aria-controls="mainNavbar" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="mainNavbar">
+                <ul class="navbar-nav ms-auto" id="dynamicNavLinks">
+                    </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header class="my-4 text-center">
+            <h1>Minister Directory</h1>
+        </header>
+
+        <div id="statusMessage" class="alert" style="display: none;"></div>
+
+        <div class="table-responsive">
+            <table id="ministersTable" class="table table-striped table-bordered table-hover table-sm" style="width:100%;">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Minister Name</th>
+                        <th>Home Church</th>
+                        <th>Upcoming Revivals</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="ministersTableBody">
+                    <tr><td colspan="4" class="text-center">Loading minister data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal fade" id="ministerEventsModal" tabindex="-1" aria-labelledby="ministerEventsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="ministerEventsModalLabel">Revival Engagements</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="ministerEventsModalBody">
+                    <p>Loading events...</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.0.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+
+    <script>
+        // IMPORTANT: Replace with your actual Apps Script Web App URL
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0svFL0DvyXVMc3ebkKaEyFwVSl3zWe1ff0qO5NQ1J66AlO8YSwYERGqxsZbDhR1K75g/exec';
+
+        let allMinistersData = [];
+        let allChurchesData = [];
+        let allEventsData = [];
+        let allEventParticipantsData = [];
+        let ministersDataTable;
+        let ministerEventsModalInstance;
+
+        function displayStatus(message, isError = false, autoClear = true) {
+            const statusMsg = document.getElementById("statusMessage");
+            if (!statusMsg) return;
+            statusMsg.textContent = message;
+            statusMsg.className = isError ? "alert alert-danger mt-3" : "alert alert-success mt-3";
+            statusMsg.style.display = 'block';
+            if (!isError && autoClear && message !== "Loading data...") {
+                setTimeout(() => { 
+                    if (statusMsg.textContent === message) {
+                        statusMsg.style.display = 'none';
+                        statusMsg.className = "alert";
+                    }
+                }, 5000);
+            }
+        }
+
+        async function fetchApiData(sheetName) {
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getSheetData&sheet=${sheetName}`);
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status} for ${sheetName}`);
+                const result = await response.json();
+                if (result.error) throw new Error(`API error for ${sheetName}: ${result.error}`);
+                return result.data || [];
+            } catch (error) {
+                console.error(`Error fetching ${sheetName}:`, error);
+                displayStatus(`Failed to load ${sheetName}: ${error.message}`, true, false);
+                return []; 
+            }
+        }
+
+        async function populateNavbar() {
+            try {
+                const response = await fetch(`${SCRIPT_URL}?action=getNav`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const result = await response.json();
+                if (result.error) throw new Error(result.error);
+                const links = result.data;
+                const navLinksContainer = document.getElementById('dynamicNavLinks');
+                if (!navLinksContainer || !links) return;
+                navLinksContainer.innerHTML = '';
+                links.forEach(link => {
+                    const li = document.createElement('li');
+                    li.className = 'nav-item';
+                    const a = document.createElement('a');
+                    a.className = 'nav-link';
+                    a.href = link.url;
+                    a.textContent = link.title;
+                    if (link.url && link.url.toLowerCase().startsWith('http') && !link.url.startsWith(window.location.origin)) { 
+                       a.target = '_blank';
+                    }
+                    li.appendChild(a);
+                    navLinksContainer.appendChild(li);
+                });
+            } catch (e) { console.error("Could not populate navbar:", e); }
+        }
+
+        function initializeDataTable(tableId) {
+            if ($.fn.DataTable.isDataTable(`#${tableId}`)) {
+                $(`#${tableId}`).DataTable().destroy();
+                $(`#${tableId} tbody`).empty(); 
+            }
+            ministersDataTable = $(`#${tableId}`).DataTable({
+                "pageLength": 25,
+                "lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+                "destroy": true,
+                "order": [[2, "desc"], [0, "asc"]], // Default sort: Revival Count (desc), then Minister Name (asc)
+                "columnDefs": [
+                    { "type": "num", "targets": 2 } // Ensures Revival Count column sorts numerically
+                ]
+            });
+        }
+        
+        function getMinisterRevivalCount(ministerId) {
+            if (!allEventParticipantsData || !allEventsData) return 0;
+
+            const ministerEventLinks = allEventParticipantsData.filter(
+                ep => ep && String(ep.MinisterID).trim() === ministerId
+            );
+            if (ministerEventLinks.length === 0) return 0;
+
+            const ministerEventIDs = new Set(ministerEventLinks.map(ep => ep.EventID));
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); 
+            let count = 0;
+
+            allEventsData.forEach(event => {
+                if (event && ministerEventIDs.has(event.EventID) && 
+                    (String(event.EventType || "").trim().toLowerCase() === "revival" || String(event.EventType || "").trim().toLowerCase() === "revival meeting") &&
+                    (String(event.isGeneratedInstance).toLowerCase() !== 'true') 
+                ) {
+                    if (!event.StartDate) return;
+                    const eventStart = new Date(event.StartDate);
+                    const eventEnd = event.EndDate ? new Date(event.EndDate) : new Date(eventStart);
+                    const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
+
+                    const eventStartDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+                    let eventLastDayInclusive;
+                    if (isAllDay) {
+                        let exclusiveEndLocal = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                        eventLastDayInclusive = new Date(exclusiveEndLocal.setDate(exclusiveEndLocal.getDate() - 1));
+                    } else {
+                        eventLastDayInclusive = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                    }
+                    if (eventLastDayInclusive < eventStartDateOnly) eventLastDayInclusive = new Date(eventStartDateOnly);
+
+                    const isOngoing = (today >= eventStartDateOnly && today <= eventLastDayInclusive);
+                    const isFuture = (eventStartDateOnly > today);
+
+                    if (isOngoing || isFuture) {
+                        count++;
+                    }
+                }
+            });
+            return count;
+        }
+
+        function populateMinistersTable() {
+            const tbody = document.getElementById("ministersTableBody");
+            if (!tbody) { console.error("ministersTableBody element not found!"); return; }
+
+            if ($.fn.DataTable.isDataTable('#ministersTable')) {
+                $('#ministersTable').DataTable().destroy();
+            }
+            tbody.innerHTML = ""; 
+
+            if (allMinistersData && allMinistersData.length > 0) {
+                allMinistersData.forEach(minister => {
+                    if (!minister || !minister.MinisterID || !minister.Name) return; 
+                    
+                    const row = tbody.insertRow();
+                    row.insertCell().textContent = minister.Name || "N/A";
+
+                    let homeChurchName = "N/A";
+                    if (minister.ChurchID && allChurchesData && allChurchesData.length > 0) {
+                        const homeChurch = allChurchesData.find(c => c && c.ChurchID === minister.ChurchID);
+                        if (homeChurch) homeChurchName = homeChurch.ChurchName || "N/A";
+                    }
+                    row.insertCell().textContent = homeChurchName;
+                    
+                    // Calculate and add revival count
+                    const revivalCount = getMinisterRevivalCount(String(minister.MinisterID).trim());
+                    row.insertCell().textContent = revivalCount;
+                    
+                    const actionsCell = row.insertCell();
+                    actionsCell.innerHTML = `<button type="button" class="btn btn-sm btn-primary view-revivals-btn" data-ministerid="${minister.MinisterID}" data-ministername="${minister.Name.replace(/"/g, '&quot;')}">View Details</button>`;
+                });
+                initializeDataTable('ministersTable'); 
+                attachViewRevivalsButtonListeners();
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center">No ministers found.</td></tr>'; // Adjusted colspan
+            }
+        }
+
+        function attachViewRevivalsButtonListeners() {
+            $('#ministersTable tbody').off('click', 'button.view-revivals-btn').on('click', 'button.view-revivals-btn', function () {
+                const ministerId = $(this).data('ministerid');
+                const ministerName = $(this).data('ministername');
+                if (ministerId) {
+                    displayRevivalsInModal(String(ministerId), ministerName);
+                } else {
+                    console.error("View Revivals button clicked without a ministerId.");
+                }
+            });
+        }
+
+        function displayRevivalsInModal(ministerId, ministerName) {
+            const modalTitle = document.getElementById("ministerEventsModalLabel");
+            const modalBody = document.getElementById("ministerEventsModalBody");
+
+            if(!modalTitle || !modalBody){ console.error("Minister events modal elements not found!"); return; }
+
+            modalTitle.textContent = `Revival Engagements for ${ministerName}`;
+            modalBody.innerHTML = '<p>Loading revival events...</p>';
+
+            const ministerEventLinks = allEventParticipantsData.filter(
+                ep => ep && String(ep.MinisterID).trim() === ministerId
+            );
+
+            if (ministerEventLinks.length === 0) {
+                modalBody.innerHTML = "<p>No revival engagements found for this minister.</p>";
+                if(ministerEventsModalInstance) ministerEventsModalInstance.show();
+                return;
+            }
+
+            const ministerEventIDs = new Set(ministerEventLinks.map(ep => ep.EventID));
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); 
+
+            const relevantRevivals = [];
+            allEventsData.forEach(event => {
+                if (event && ministerEventIDs.has(event.EventID) && 
+                    (String(event.EventType || "").trim().toLowerCase() === "revival" || String(event.EventType || "").trim().toLowerCase() === "revival meeting") &&
+                    (String(event.isGeneratedInstance).toLowerCase() !== 'true') 
+                ) {
+                    if (!event.StartDate) return;
+                    const eventStart = new Date(event.StartDate);
+                    const eventEnd = event.EndDate ? new Date(event.EndDate) : new Date(eventStart);
+                    const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
+
+                    const eventStartDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+                    let eventLastDayInclusive;
+                    if (isAllDay) {
+                        let exclusiveEndLocal = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                        eventLastDayInclusive = new Date(exclusiveEndLocal.setDate(exclusiveEndLocal.getDate() - 1));
+                    } else {
+                        eventLastDayInclusive = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                    }
+                    if (eventLastDayInclusive < eventStartDateOnly) eventLastDayInclusive = new Date(eventStartDateOnly);
+
+                    const isOngoing = (today >= eventStartDateOnly && today <= eventLastDayInclusive);
+                    const isFuture = (eventStartDateOnly > today);
+
+                    if (isOngoing || isFuture) {
+                        relevantRevivals.push(event);
+                    }
+                }
+            });
+
+            if (relevantRevivals.length === 0) {
+                modalBody.innerHTML = "<p>No upcoming or ongoing revival engagements found for this minister.</p>";
+            } else {
+                relevantRevivals.sort((a,b) => new Date(a.StartDate) - new Date(b.StartDate));
+                let html = "<ul>";
+                relevantRevivals.forEach(revival => {
+                    let title = revival.EventTitle || "Revival";
+                    if (String(revival.IsSeriesParent).toLowerCase() === 'true' && !title.toLowerCase().includes("series")) {
+                        title += " (Series)";
+                    }
+                    
+                    const hostChurch = allChurchesData.find(c => c && c.ChurchID === revival.ChurchID);
+                    const hostChurchName = hostChurch ? hostChurch.ChurchName : (revival.ChurchID || "Unknown Church");
+
+                    const startDate = new Date(revival.StartDate);
+                    const endDate = revival.EndDate ? new Date(revival.EndDate) : startDate;
+                    const isAllDay = String(revival.IsAllDay).toLowerCase() === 'true';
+                    const dateOptions = { year: 'numeric', month: 'short', day: 'numeric' };
+                    let dateString = startDate.toLocaleDateString(undefined, dateOptions);
+                    if (isAllDay) {
+                        let actualEndDate = new Date(endDate.getTime());
+                        actualEndDate.setDate(actualEndDate.getUTCDate() -1); 
+                        if (actualEndDate.getTime() > startDate.getTime()) { 
+                             dateString += ` - ${actualEndDate.toLocaleDateString(undefined, dateOptions)}`;
+                        }
+                    } else {
+                        const timeOptions = { hour: 'numeric', minute:'2-digit' };
+                        dateString = `${startDate.toLocaleDateString(undefined, dateOptions)}, ${startDate.toLocaleTimeString(undefined, timeOptions)}`;
+                        if (endDate.getTime() > startDate.getTime()) { 
+                            if (startDate.toDateString() === endDate.toDateString()) {
+                                dateString += ` - ${endDate.toLocaleTimeString(undefined, timeOptions)}`;
+                            } else {
+                                dateString += ` - ${endDate.toLocaleDateString(undefined, dateOptions)}, ${endDate.toLocaleTimeString(undefined, timeOptions)}`;
+                            }
+                        }
+                    }
+                    html += `<li><span class="event-title">${title}</span><br><span class="event-details">At: ${hostChurchName}<br>When: ${dateString}</span></li>`;
+                });
+                html += "</ul>";
+                modalBody.innerHTML = html;
+            }
+            if(ministerEventsModalInstance) ministerEventsModalInstance.show();
+        }
+
+        async function loadPageData() {
+            displayStatus("Loading data...", false, false); 
+            try {
+                const [ministers, churches, events, participants] = await Promise.all([
+                    fetchApiData("Ministers"),
+                    fetchApiData("Churches"),
+                    fetchApiData("Events"),
+                    fetchApiData("EventParticipants")
+                ]);
+                
+                allMinistersData = ministers || [];
+                allChurchesData = churches || [];
+                allEventsData = events || [];
+                allEventParticipantsData = participants || [];
+
+                if (allMinistersData.length === 0) {
+                    displayStatus("No minister data found.", true, false);
+                } else {
+                    displayStatus("Data loaded successfully!", false, true);
+                }
+                populateMinistersTable();
+                
+            } catch (err) {
+                console.error("Error during initial data load:", err);
+                displayStatus("A general error occurred while loading data: " + err.message, true, false);
+                const tbody = document.getElementById("ministersTableBody");
+                if(tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center">Error loading data.</td></tr>`; // Adjusted colspan
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            populateNavbar();
+            if (typeof bootstrap !== 'undefined' && document.getElementById('ministerEventsModal')) {
+                ministerEventsModalInstance = new bootstrap.Modal(document.getElementById('ministerEventsModal'));
+            } else {
+                console.warn("Bootstrap modal JS not found or modal element missing.");
+            }
+            if(typeof $ !== 'undefined' && $.fn.DataTable) {
+                loadPageData();
+            } else {
+                displayStatus("Critical page components (jQuery or DataTables) not loaded.", true, false);
+            }
+        });
+    </script>
+</body>
+</html>
