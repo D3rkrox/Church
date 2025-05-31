@@ -626,8 +626,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // ... (The rest of your eventClick function for Church and Participants remains the same) ...
     const church = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(props.ChurchID).trim());
     if (church) { 
+        const encodedAddress = encodeURIComponent(church.Address);
         detailsHtml += `<p><strong>Church:</strong> ${church.ChurchName||'N/A'}</p>`;
-        detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||church.Address||'N/A'}</p>`;
+        detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||`<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`||'N/A'}</p>`;
     }
 
     const participantsForEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
