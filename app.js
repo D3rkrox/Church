@@ -1,6 +1,42 @@
 // app.js
 
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz0svFL0DvyXVMc3ebkKaEyFwVSl3zWe1ff0qO5NQ1J66AlO8YSwYERGqxsZbDhR1K75g/exec';
+// 508 Compliant Color Palette for Event Types
+// Keys should be lowercase for case-insensitive matching.
+// Ensure your EventType strings from Code.gs (derived from sheet data)
+// will match these keys after being converted to lowercase.
+const eventTypeColors = {
+    // Special Event Types (match what's in your "Events" sheet 'EventType' column)
+    "revival":                            { backgroundColor: '#003f5c', textColor: '#FFFFFF' }, // Deep Blue
+    "revival meeting":                  { backgroundColor: '#003f5c', textColor: '#FFFFFF' }, // Deep Blue
+    "singing":                            { backgroundColor: '#228B22', textColor: '#FFFFFF' }, // Forest Green
+    "fundraiser":                         { backgroundColor: '#B8860B', textColor: '#FFFFFF' }, // DarkGoldenrod
+    "special service":                  { backgroundColor: '#800080', textColor: '#FFFFFF' }, // Purple
+    "camp meeting":                     { backgroundColor: '#4682B4', textColor: '#FFFFFF' }, // Steel Blue
+    "youth event":                      { backgroundColor: '#5F9EA0', textColor: '#FFFFFF' }, // Cadet Blue
+    "concert":                            { backgroundColor: '#D2691E', textColor: '#FFFFFF' }, // Chocolate
+    "meeting":                            { backgroundColor: '#6A5ACD', textColor: '#FFFFFF' }, // SlateBlue
+
+    // Regular Service Types (match your 'ServiceTitle' values from "Services" sheet)
+    "sunday morning worship":             { backgroundColor: '#ADD8E6', textColor: '#000000' }, // Light Blue
+    "sunday evening worship":             { backgroundColor: '#FFFACD', textColor: '#000000' }, // LemonChiffon
+    "midweek bible study":                { backgroundColor: '#D3D3D3', textColor: '#000000' }, // Light Grey
+    "midweek evening service":            { backgroundColor: '#D3D3D3', textColor: '#000000' }, // Light Grey
+    "communion service":                  { backgroundColor: '#8B0000', textColor: '#FFFFFF' }, // Dark Red
+    "regular weekend service":            { backgroundColor: '#F0E68C', textColor: '#000000' }, // Khaki
+
+    // For services flagged as communion (e.g., "Sunday Morning Worship (Communion)")
+    "sunday morning worship (communion)": { backgroundColor: '#A52A2A', textColor: '#FFFFFF' }, // Brown (distinct from dark red)
+    "sunday evening worship (communion)": { backgroundColor: '#A52A2A', textColor: '#FFFFFF' },
+    "regular weekend service (communion)":{ backgroundColor: '#A52A2A', textColor: '#FFFFFF' },
+    
+    // Default color for any unmapped types
+    "default":                            { backgroundColor: '#708090', textColor: '#FFFFFF' }  // Slate Grey
+};
+function getEventColors(eventType) {
+    const typeStr = String(eventType || '').trim().toLowerCase();
+    return eventTypeColors[typeStr] || eventTypeColors["default"];
+}
 
 let allEventsData = [];
 let allChurchesData = [];
@@ -52,20 +88,23 @@ function processDataForCalendar() {
         }
 
         const eventSourceType = String(event.sourceType || '').trim();
-        const isAllDayEvent = String(event.IsAllDay).toLowerCase() === "true"; // Determine if original event is all-day
+        const isAllDayEvent = String(event.IsAllDay).toLowerCase() === "true";
+        
+        // Get colors based on the event's EventType
+        const colors = getEventColors(event.EventType);
 
         let fcEventData = {
             title: event.EventTitle,
             start: event.StartDate,
             end: event.EndDate,
-            allDay: isAllDayEvent, // Use the original IsAllDay flag
-            // MODIFIED: Only set event-specific timeZone if it's NOT an all-day event
+            allDay: isAllDayEvent,
             timeZone: isAllDayEvent ? undefined : (event.eventActualTimeZone || 'America/Chicago'),
+            backgroundColor: colors.backgroundColor, // Apply background color
+            borderColor: colors.backgroundColor,     // Make border same as background (or choose a darker shade)
+            textColor: colors.textColor,           // Apply text color for contrast
             extendedProps: { ...event } 
         };
 
-        // This formatting for allDay events is crucial for FullCalendar
-        // It ensures start/end are simple YYYY-MM-DD strings
         if (fcEventData.allDay) {
             if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
                 fcEventData.start = fcEventData.start.substring(0, 10);
@@ -75,54 +114,41 @@ function processDataForCalendar() {
             }
         }
 
+        // Logic for handling different event source types
         if (eventSourceType.startsWith('special-event-series-parent')) {
             if (!showExpandedSeries) {
-                // This is a placeholder for a series parent
-                fcEventData.allDay = true; // Force placeholder to be all-day
+                fcEventData.allDay = true; 
                 fcEventData.title = `${event.EventTitle} (${event.EventType || 'Series'})`; 
-                fcEventData.extendedProps.isPlaceholder = true; 
-                // fcEventData.display = 'background'; // User preferred block display for placeholders
-                // fcEventData.backgroundColor = '#FFC107'; // Optional: if you want a specific color
-
-                // MODIFIED: Ensure all-day placeholders also don't have a specific timezone
-                // and their dates are correctly formatted YYYY-MM-DD
-                fcEventData.timeZone = undefined; 
+                fcEventData.extendedProps.isPlaceholder = true;
+                // Placeholder might use its type's color or a specific placeholder color
+                // fcEventData.display = 'background'; // If you prefer background events for these
+                // fcEventData.backgroundColor = '#eee'; // Example placeholder-specific color
+                // fcEventData.textColor = '#000';
                 if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
-                    fcEventData.start = fcEventData.start.substring(0, 10);
+                     fcEventData.start = fcEventData.start.substring(0, 10);
                 }
-                // For multi-day placeholders, end date needs to be exclusive YYYY-MM-DD
-                // The EndDate from cache for series parents should already be the exclusive UTC start of the next day.
                 if (fcEventData.end && typeof fcEventData.end === 'string' && fcEventData.end.includes('T')) {
-                    fcEventData.end = fcEventData.end.substring(0, 10);
+                     fcEventData.end = fcEventData.end.substring(0, 10);
                 } else if (fcEventData.end === null && fcEventData.start) { 
-                    // If end is null for an all-day placeholder, make it same as start (for single-day series display)
-                    // or calculate exclusive end if it's truly multi-day based on original event.EndDate
-                    // This part might need refinement based on how single-day series parents are handled.
-                    // For now, if event.EndDate was null, this will make it appear as a single day.
-                     let tempEndDate = new Date(fcEventData.start);
-                     tempEndDate.setDate(tempEndDate.getDate());
+                     let tempEndDate = new Date(fcEventData.start.replace(/-/g, '/')); // Ensure parsing if just YYYY-MM-DD
+                     tempEndDate.setDate(tempEndDate.getDate() + 1);
                      fcEventData.end = tempEndDate.toISOString().substring(0,10);
                 }
-
+                fcEventData.timeZone = undefined; // Ensure all-day placeholders use calendar's local time
 
                 processedEvents.push(fcEventData);
             }
         } else if (eventSourceType.startsWith('special-event-series-instance')) {
             if (showExpandedSeries) {
-                // Instances are usually timed, so their original fcEventData.timeZone is correct
                 processedEvents.push(fcEventData);
             }
         } else if (eventSourceType.startsWith('regular-')) {
-            // Regular services are usually timed, fcEventData.timeZone is correct
             processedEvents.push(fcEventData);
         } else if (eventSourceType.startsWith('special-event-single')) {
-            // Single special events: if all-day, fcEventData.timeZone is already undefined. If timed, it's set.
             processedEvents.push(fcEventData);
         } else { 
-            // Fallback for events that might not have sourceType
             if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
-                // If it's an older single event, ensure its timeZone is undefined if all-day
-                if (isAllDayEvent) fcEventData.timeZone = undefined;
+                if (isAllDayEvent) fcEventData.timeZone = undefined; // Ensure fallback all-day also respects local
                 processedEvents.push(fcEventData);
             }
         }
