@@ -52,16 +52,20 @@ function processDataForCalendar() {
         }
 
         const eventSourceType = String(event.sourceType || '').trim();
+        const isAllDayEvent = String(event.IsAllDay).toLowerCase() === "true"; // Determine if original event is all-day
 
         let fcEventData = {
             title: event.EventTitle,
             start: event.StartDate,
-            end: event.EndDate, // This was correctly uncommented in your provided file
-            allDay: String(event.IsAllDay).toLowerCase() === "true",
-            timeZone: event.eventActualTimeZone || 'America/Chicago',
+            end: event.EndDate,
+            allDay: isAllDayEvent, // Use the original IsAllDay flag
+            // MODIFIED: Only set event-specific timeZone if it's NOT an all-day event
+            timeZone: isAllDayEvent ? undefined : (event.eventActualTimeZone || 'America/Chicago'),
             extendedProps: { ...event } 
         };
 
+        // This formatting for allDay events is crucial for FullCalendar
+        // It ensures start/end are simple YYYY-MM-DD strings
         if (fcEventData.allDay) {
             if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
                 fcEventData.start = fcEventData.start.substring(0, 10);
@@ -73,24 +77,52 @@ function processDataForCalendar() {
 
         if (eventSourceType.startsWith('special-event-series-parent')) {
             if (!showExpandedSeries) {
-                fcEventData.allDay = true; 
-                // Keep display as 'block' if we want it to be a clickable placeholder
-                // fcEventData.display = 'background'; // Or 'block' if you prefer
-                // fcEventData.backgroundColor = '#FFC107'; 
+                // This is a placeholder for a series parent
+                fcEventData.allDay = true; // Force placeholder to be all-day
                 fcEventData.title = `${event.EventTitle} (${event.EventType || 'Series'})`; 
                 fcEventData.extendedProps.isPlaceholder = true; 
+                // fcEventData.display = 'background'; // User preferred block display for placeholders
+                // fcEventData.backgroundColor = '#FFC107'; // Optional: if you want a specific color
+
+                // MODIFIED: Ensure all-day placeholders also don't have a specific timezone
+                // and their dates are correctly formatted YYYY-MM-DD
+                fcEventData.timeZone = undefined; 
+                if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
+                    fcEventData.start = fcEventData.start.substring(0, 10);
+                }
+                // For multi-day placeholders, end date needs to be exclusive YYYY-MM-DD
+                // The EndDate from cache for series parents should already be the exclusive UTC start of the next day.
+                if (fcEventData.end && typeof fcEventData.end === 'string' && fcEventData.end.includes('T')) {
+                    fcEventData.end = fcEventData.end.substring(0, 10);
+                } else if (fcEventData.end === null && fcEventData.start) { 
+                    // If end is null for an all-day placeholder, make it same as start (for single-day series display)
+                    // or calculate exclusive end if it's truly multi-day based on original event.EndDate
+                    // This part might need refinement based on how single-day series parents are handled.
+                    // For now, if event.EndDate was null, this will make it appear as a single day.
+                     let tempEndDate = new Date(fcEventData.start);
+                     tempEndDate.setDate(tempEndDate.getDate());
+                     fcEventData.end = tempEndDate.toISOString().substring(0,10);
+                }
+
+
                 processedEvents.push(fcEventData);
             }
         } else if (eventSourceType.startsWith('special-event-series-instance')) {
             if (showExpandedSeries) {
+                // Instances are usually timed, so their original fcEventData.timeZone is correct
                 processedEvents.push(fcEventData);
             }
         } else if (eventSourceType.startsWith('regular-')) {
+            // Regular services are usually timed, fcEventData.timeZone is correct
             processedEvents.push(fcEventData);
         } else if (eventSourceType.startsWith('special-event-single')) {
+            // Single special events: if all-day, fcEventData.timeZone is already undefined. If timed, it's set.
             processedEvents.push(fcEventData);
         } else { 
+            // Fallback for events that might not have sourceType
             if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
+                // If it's an older single event, ensure its timeZone is undefined if all-day
+                if (isAllDayEvent) fcEventData.timeZone = undefined;
                 processedEvents.push(fcEventData);
             }
         }
@@ -116,6 +148,12 @@ async function initializeApp() {
         allServiceSchedulePatterns = servicePatterns || []; 
         allGroupMembersData = groupMembers || [];
 
+        console.log("initializeApp - Raw allEventsData from API:", JSON.parse(JSON.stringify(allEventsData)));
+// Log specifically for special event types
+const specialParents = allEventsData.filter(e => e.sourceType === 'special-event-series-parent');
+const specialInstances = allEventsData.filter(e => e.sourceType === 'special-event-series-instance');
+const specialSingles = allEventsData.filter(e => e.sourceType === 'special-event-single');
+console.log(`Found ${specialParents.length} special series parents, ${specialInstances.length} special instances, ${specialSingles.length} single special events in raw data.`);
         populateFilterDropdowns(); // Call this first
         applyFilters();            // Then apply filters for initial render
 
