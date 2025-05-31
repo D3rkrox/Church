@@ -7,7 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
     <style>
-        body { 
+               body { 
             padding-top: 70px; /* Adjust for fixed-top navbar height */
             font-family: Arial, sans-serif; 
             background-color: #f8f9fa;
@@ -19,9 +19,11 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin-top: 20px;
         }
+        /* Style for DataTables header cells to match DataView.html */
         table.dataTable th { 
-            background-color: #e9ecef; 
+            background-color: #e9ecef !important; /* Light grey background, ensure it overrides defaults */
             cursor: pointer; 
+            color: #212529 !important; /* Dark text for header, ensure it overrides defaults */
         }
         .modal-body ul { list-style-type: none; padding-left: 0; }
         .modal-body li { margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
@@ -29,6 +31,11 @@
         .event-title { font-weight: bold; }
         .event-details { font-size: 0.9rem; color: #555; }
         #statusMessage { margin-top: 15px; }
+
+        /* Hide the "Show X entries" dropdown, like in DataView.html */
+        div.dataTables_wrapper div.dataTables_length {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -164,8 +171,8 @@
                 $(`#${tableId} tbody`).empty(); 
             }
             ministersDataTable = $(`#${tableId}`).DataTable({
-                "pageLength": 25,
-                "lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
+                "pageLength": -1,
+                //"lengthMenu": [ [10, 25, 50, 100, -1], [10, 25, 50, 100, "All"] ],
                 "destroy": true,
                 "order": [[2, "desc"], [0, "asc"]], // Default sort: Revival Count (desc), then Minister Name (asc)
                 "columnDefs": [
