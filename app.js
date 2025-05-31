@@ -92,6 +92,8 @@ function processDataForCalendar() {
         
         // Get colors based on the event's EventType
         const colors = getEventColors(event.EventType);
+        const eventClass = getEventTypeClassName(event.EventType);
+
 
         let fcEventData = {
             title: event.EventTitle,
@@ -102,6 +104,7 @@ function processDataForCalendar() {
             backgroundColor: colors.backgroundColor, // Apply background color
             borderColor: colors.backgroundColor,     // Make border same as background (or choose a darker shade)
             textColor: colors.textColor,           // Apply text color for contrast
+            classNames: [eventClass],
             extendedProps: { ...event } 
         };
 
@@ -408,7 +411,7 @@ function handleAddFilter(category, value) { /* ... This function remains the sam
         return; 
     }
     // For dropdowns acting as "add filter" buttons (single select tag for category)
-    activeFilters[category].clear(); 
+    //activeFilters[category].clear(); 
     activeFilters[category].add(value);
 
     if (category === 'eventType') {
@@ -557,6 +560,12 @@ async function populateNavbar() {
         // Optionally display an error to the user in the navbar area
     }
 }
+function getEventTypeClassName(eventType) {
+    const typeStr = String(eventType || 'default').trim().toLowerCase()
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/[^a-z0-9-]/g, ''); // Remove special characters
+    return `event-type-${typeStr || 'default'}`;
+}
 // --- MODIFIED: DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', function() {
     populateNavbar(); // Keep this first
@@ -589,6 +598,7 @@ document.addEventListener('DOMContentLoaded', function() {
             left: 'prev,next today', center: 'title',
             right: 'listDay,listWeek,listMonth,listYear,dayGridMonth' // Matched view names
         },
+        eventDisplay: 'block',
         timeZone: 'local', 
         events: [], 
         weekends: true,
