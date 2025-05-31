@@ -56,7 +56,7 @@ function processDataForCalendar() {
         let fcEventData = {
             title: event.EventTitle,
             start: event.StartDate,
-            //end: event.EndDate,
+            end: event.EndDate, // This was correctly uncommented in your provided file
             allDay: String(event.IsAllDay).toLowerCase() === "true",
             timeZone: event.eventActualTimeZone || 'America/Chicago',
             extendedProps: { ...event } 
@@ -72,28 +72,16 @@ function processDataForCalendar() {
         }
 
         if (eventSourceType.startsWith('special-event-series-parent')) {
-            // console.log("Processing potential series parent:", event.EventTitle, "ShowExpanded:", showExpandedSeries); 
             if (!showExpandedSeries) {
-                // console.log(">>> Adding parent placeholder as REGULAR ALL-DAY EVENT for:", event.EventTitle); 
-
-                // --- TEMPORARY CHANGE: Make it a normal all-day event ---
                 fcEventData.allDay = true; 
-                // fcEventData.display = 'background'; // Comment out background display
-                // fcEventData.backgroundColor = '#FFC107'; // Comment out background color
-                fcEventData.title = `${event.EventTitle} (${event.EventType} Series)`; // Keep a distinct title
-                fcEventData.extendedProps.isPlaceholder = true; // Still mark it
-
-                // Ensure start and end are YYYY-MM-DD for allDay events
-                // The global allDay formatting block later will handle the substring(0,10)
-                // We just need to ensure fcEventData.start and fcEventData.end are correct
-                // For a multi-day all-day event, 'end' is exclusive.
-                // StartDate: "2025-06-08T05:00:00.000Z" -> '2025-06-08'
-                // EndDate:   "2025-06-14T04:59:00.000Z" -> means it includes up to end of 13th. Exclusive end should be '2025-06-14'
-                // The fcEventData already has these UTC strings. The allDay formatting block handles the conversion.
-
+                // Keep display as 'block' if we want it to be a clickable placeholder
+                // fcEventData.display = 'background'; // Or 'block' if you prefer
+                // fcEventData.backgroundColor = '#FFC107'; 
+                fcEventData.title = `${event.EventTitle} (${event.EventType || 'Series'})`; 
+                fcEventData.extendedProps.isPlaceholder = true; 
                 processedEvents.push(fcEventData);
             }
-        }  else if (eventSourceType.startsWith('special-event-series-instance')) {
+        } else if (eventSourceType.startsWith('special-event-series-instance')) {
             if (showExpandedSeries) {
                 processedEvents.push(fcEventData);
             }
@@ -102,8 +90,6 @@ function processDataForCalendar() {
         } else if (eventSourceType.startsWith('special-event-single')) {
             processedEvents.push(fcEventData);
         } else { 
-            // Fallback for events from "Events" sheet that might not have sourceType yet in an old cache
-            // OR if sourceType was ""
             if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
                 processedEvents.push(fcEventData);
             }
@@ -117,13 +103,9 @@ async function initializeApp() {
     if (loadingIndicator) loadingIndicator.style.display = 'block';
     try {
         const [events, churches, ministers, participants, guestParticipants, servicePatterns, groupMembers] = await Promise.all([
-            fetchData('Events'),
-            fetchData('Churches'),
-            fetchData('Ministers'),
-            fetchData('EventParticipants'),
-            fetchData('GuestParticipants'), 
-            fetchData('ServiceSchedulePatterns') ,
-            fetchData('GroupMembers') // <-- ADD THIS LINE
+            fetchData('Events'), fetchData('Churches'), fetchData('Ministers'),
+            fetchData('EventParticipants'), fetchData('GuestParticipants'), 
+            fetchData('ServiceSchedulePatterns'), fetchData('GroupMembers')
         ]);
 
         allEventsData = events || [];
@@ -132,28 +114,16 @@ async function initializeApp() {
         allEventParticipantsData = participants || [];
         allGroupsData = guestParticipants || []; 
         allServiceSchedulePatterns = servicePatterns || []; 
-        allGroupMembersData = groupMembers || []; // <-- ADD THIS LINE
-/*
-        console.log("Fetched allEventsData count in initializeApp:", allEventsData.length);
-        if (allEventsData.length > 0) {
-            //console.log("Sample event data item 0 from allEventsData:", JSON.stringify(allEventsData[0]));
-            const seriesParentExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() === "true");
-            if(seriesParentExample) console.log("Sample series parent from allEventsData:", JSON.stringify(seriesParentExample));
-            const generatedInstanceExample = allEventsData.find(ev => String(ev.isGeneratedInstance).toLowerCase() === "true");
-            if(generatedInstanceExample) console.log("Sample generated instance from allEventsData:", JSON.stringify(generatedInstanceExample));
-            const singleEventExample = allEventsData.find(ev => String(ev.IsSeriesParent).toLowerCase() !== "true" && String(ev.isGeneratedInstance).toLowerCase() !== "true");
-            if(singleEventExample) console.log("Sample single event from allEventsData:", JSON.stringify(singleEventExample));
-        }
-*/
+        allGroupMembersData = groupMembers || [];
 
-        populateFilterDropdowns();
-        applyFilters(); 
+        populateFilterDropdowns(); // Call this first
+        applyFilters();            // Then apply filters for initial render
 
     } catch (error) {
         console.error("Error during application initialization:", error);
         const errorContainer = document.getElementById('error-container');
         if (errorContainer) {
-            errorContainer.textContent = 'Failed to load calendar data. Please try refreshing.';
+            errorContainer.textContent = 'Failed to load calendar data. Please try refreshing. Error: ' + error.message;
             errorContainer.style.display = 'block';
         }
     } finally {
@@ -179,167 +149,189 @@ function showFilterCollapse() {
         filterCollapseInstance.show();
     }
 }
-
-function renderActiveFilterTags() {
+function renderActiveFilterTags() { 
     const container = document.getElementById('activeFiltersContainer');
     if (!container) return;
     container.innerHTML = ''; 
     let hasActiveFilters = false;
-
     Object.keys(activeFilters).forEach(category => {
         activeFilters[category].forEach(value => {
             hasActiveFilters = true;
-            let displayValue = value;
-            let categoryLabel = "";
-
+            let displayValue = value; let categoryLabel = "";
             if (category === 'church' && allChurchesData) {
                 const church = allChurchesData.find(c => c && String(c.ChurchID) === String(value));
                 if (church) displayValue = church.ChurchName || value;
                 categoryLabel = "Church";
-            } else if (category === 'eventType') {
-                categoryLabel = "Type";
-            } else if (category === 'participant') {
-                categoryLabel = "Participant"; 
-            }
-
+            } else if (category === 'eventType') { categoryLabel = "Type";
+            } else if (category === 'participant') { categoryLabel = "Participant"; }
             const tag = document.createElement('span');
             tag.className = 'filter-tag';
             tag.setAttribute('data-filter-category', category);
             tag.setAttribute('data-filter-value', value); 
             tag.innerHTML = `${categoryLabel}: ${displayValue} <button type="button" class="btn-close-custom" aria-label="Remove filter">&times;</button>`;
-            tag.querySelector('.btn-close-custom').addEventListener('click', function() {
-                handleRemoveFilter(category, value);
-            });
+            tag.querySelector('.btn-close-custom').addEventListener('click', function() { handleRemoveFilter(category, value); });
             container.appendChild(tag);
         });
     });
     container.style.display = hasActiveFilters ? 'block' : 'none';
-    if (hasActiveFilters) { 
-        showFilterCollapse();
-    }
+    if (hasActiveFilters) showFilterCollapse();
 }
-
-function updateParticipantOptions() {
+function updateParticipantOptions() { 
     const participantFilterEl = document.getElementById('participantFilter');
     if (!participantFilterEl) return;
-
     const previouslyActiveParticipantFilters = new Set(activeFilters.participant); 
     participantFilterEl.innerHTML = '<option value="">-- Select Participant --</option>';
-    
     const uniqueParticipants = new Set();
     const activeEventTypeFilters = [...activeFilters.eventType];
     let filterMode = "all";
-
     if (activeEventTypeFilters.length > 0) { 
-        if (activeEventTypeFilters.some(type => type.toLowerCase() === "singing")) {
-            filterMode = "singing";
-        } else if (activeEventTypeFilters.some(type => type.toLowerCase() === "revival" || type.toLowerCase() === "revival meeting")) {
-            filterMode = "revival";
-        }
+        if (activeEventTypeFilters.some(type => type.toLowerCase() === "singing")) filterMode = "singing";
+        else if (activeEventTypeFilters.some(type => type.toLowerCase() === "revival" || type.toLowerCase() === "revival meeting")) filterMode = "revival";
     }
-    
     if (filterMode === "singing") {
-        if (allGroupsData && allGroupsData.length > 0) {
-            allGroupsData.forEach(group => {
-                if (group && group.GroupName) uniqueParticipants.add(String(group.GroupName).trim());
-            });
-        }
-        allEventParticipantsData.forEach(p => { 
-            if (p && p.ParticipantNameOverride && !p.MinisterID && !p.GroupID) {
-                 uniqueParticipants.add(String(p.ParticipantNameOverride).trim());
-            }
-        });
+        if (allGroupsData && allGroupsData.length > 0) allGroupsData.forEach(group => { if (group && group.GroupName) uniqueParticipants.add(String(group.GroupName).trim()); });
+        allEventParticipantsData.forEach(p => { if (p && p.ParticipantNameOverride && !p.MinisterID && !p.GroupID) uniqueParticipants.add(String(p.ParticipantNameOverride).trim()); });
     } else if (filterMode === "revival") {
-        if (allMinistersData && allMinistersData.length > 0) {
-            allMinistersData.forEach(minister => {
-                if (minister && minister.Name) uniqueParticipants.add(String(minister.Name).trim());
-            });
-        }
+        if (allMinistersData && allMinistersData.length > 0) allMinistersData.forEach(minister => { if (minister && minister.Name) uniqueParticipants.add(String(minister.Name).trim()); });
     } else { 
         if (allEventParticipantsData && allEventParticipantsData.length > 0) {
             allEventParticipantsData.forEach(participant => {
                 if(!participant) return;
-                if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") {
-                    uniqueParticipants.add(String(participant.ParticipantNameOverride).trim());
-                } else if (participant.MinisterID && allMinistersData) {
+                if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") uniqueParticipants.add(String(participant.ParticipantNameOverride).trim());
+                else if (participant.MinisterID && allMinistersData) {
                     const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
-                    if (minister && minister.Name && String(minister.Name).trim() !== "") uniqueParticipants.add(String(minister.Name).trim());
-                } else if (participant.GroupID && allGroupsData && allGroupsData.length > 0) { 
+                    if (minister && minister.Name) uniqueParticipants.add(String(minister.Name).trim());
+                } else if (participant.GroupID && allGroupsData) { 
                     const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
-                    if (group && group.GroupName && String(group.GroupName).trim() !== "") uniqueParticipants.add(String(group.GroupName).trim());
+                    if (group && group.GroupName) uniqueParticipants.add(String(group.GroupName).trim());
                 }
             });
         }
     }
-    
     [...uniqueParticipants].filter(Boolean).sort().forEach(name => participantFilterEl.add(new Option(name, name)));
-    
     let participantFilterChanged = false;
     previouslyActiveParticipantFilters.forEach(activeP => {
-        if (!uniqueParticipants.has(activeP)) {
-            activeFilters.participant.delete(activeP);
-            participantFilterChanged = true;
-        }
+        if (!uniqueParticipants.has(activeP)) { activeFilters.participant.delete(activeP); participantFilterChanged = true; }
     });
-
-    if (participantFilterChanged) {
-        renderActiveFilterTags(); 
-    }
+    if (participantFilterChanged) renderActiveFilterTags(); 
 }
 
-
+// --- REPLACE THIS ENTIRE FUNCTION ---
 function populateFilterDropdowns() {
     const eventTypeFilterEl = document.getElementById('eventTypeFilter');
     const churchFilterEl = document.getElementById('churchFilter');
-    const participantFilterEl = document.getElementById('participantFilter'); 
-    const expandSeriesFilterEl = document.getElementById('expandSeriesFilter'); 
-    if (expandSeriesFilterEl) {
-        expandSeriesFilterEl.removeEventListener('change', applyFilters); 
-        expandSeriesFilterEl.addEventListener('change', applyFilters);
-    }
-    const includeRegularServicesFilterEl = document.getElementById('includeRegularServicesFilter');
-    if (includeRegularServicesFilterEl) {
-        includeRegularServicesFilterEl.removeEventListener('change', applyFilters);
-        includeRegularServicesFilterEl.addEventListener('change', applyFilters);
+    // const participantFilterEl = document.getElementById('participantFilter'); // Populated by updateParticipantOptions
+    
+    const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
+    const includeRegularServicesCheckbox = document.getElementById('includeRegularServicesFilter');
+
+    // Determine visibility based on checkboxes
+    const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false;
+    const includeRegular = includeRegularServicesCheckbox ? includeRegularServicesCheckbox.checked : true; // Default to true if element not found
+
+    let relevantEventsForTypeFilter = [];
+    if (allEventsData && allEventsData.length > 0) {
+        allEventsData.forEach(event => {
+            if (!event || !event.EventType) return; 
+
+            const eventSourceType = String(event.sourceType || '').trim();
+            let isPotentiallyVisibleBasedOnSeriesLogic = false;
+
+            // 1. Determine visibility based on series expansion logic (mimics processDataForCalendar)
+            if (eventSourceType.startsWith('special-event-series-parent')) {
+                if (!showExpandedSeries) isPotentiallyVisibleBasedOnSeriesLogic = true;
+            } else if (eventSourceType.startsWith('special-event-series-instance')) {
+                if (showExpandedSeries) isPotentiallyVisibleBasedOnSeriesLogic = true;
+            } else if (eventSourceType.startsWith('regular-')) {
+                isPotentiallyVisibleBasedOnSeriesLogic = true; 
+            } else if (eventSourceType.startsWith('special-event-single')) {
+                isPotentiallyVisibleBasedOnSeriesLogic = true;
+            } else { 
+                // Fallback for events that might not have a sourceType yet (older data)
+                // This logic assumes if no sourceType, it's from "Events" sheet
+                if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
+                    isPotentiallyVisibleBasedOnSeriesLogic = true; // It's a single event
+                } else if (String(event.IsSeriesParent).toLowerCase() === "true" && !showExpandedSeries) {
+                    isPotentiallyVisibleBasedOnSeriesLogic = true; // It's a series parent, and we're showing parents
+                } else if (String(event.isGeneratedInstance).toLowerCase() === "true" && showExpandedSeries) {
+                    isPotentiallyVisibleBasedOnSeriesLogic = true; // It's a series instance, and we're showing instances
+                }
+            }
+
+            // 2. Further filter based on "Include Regular Services" logic
+            if (isPotentiallyVisibleBasedOnSeriesLogic) {
+                if (!includeRegular && eventSourceType.startsWith('regular-')) {
+                    // If regular services are NOT included, and this IS a regular service, then it's NOT relevant for type filter
+                } else {
+                    relevantEventsForTypeFilter.push(event);
+                }
+            }
+        });
     }
 
+    // Populate Event Types dropdown
     if (eventTypeFilterEl) {
+        const currentActiveEventTypes = new Set(activeFilters.eventType); 
+        let activeFilterWasRemoved = false;
+
         eventTypeFilterEl.innerHTML = '<option value="">-- Select Type --</option>';
-        if (allEventsData && allEventsData.length > 0) {
-            const uniqueEventTypes = new Set();
-            allEventsData.forEach(event => { 
-                if(event && event.EventType) uniqueEventTypes.add(event.EventType); 
-            });
-            [...uniqueEventTypes].filter(Boolean).sort().forEach(type => eventTypeFilterEl.add(new Option(type, type)));
+        const uniqueEventTypes = new Set();
+        relevantEventsForTypeFilter.forEach(event => { 
+            if(event.EventType) uniqueEventTypes.add(String(event.EventType).trim()); 
+        });
+        
+        const sortedUniqueEventTypes = [...uniqueEventTypes].filter(Boolean).sort();
+        sortedUniqueEventTypes.forEach(type => eventTypeFilterEl.add(new Option(type, type)));
+
+        // Check if previously active event types are still valid options
+        currentActiveEventTypes.forEach(activeType => {
+            if (!sortedUniqueEventTypes.includes(activeType)) {
+                activeFilters.eventType.delete(activeType);
+                activeFilterWasRemoved = true;
+            }
+        });
+
+        if (activeFilterWasRemoved) {
+            renderActiveFilterTags(); 
+            updateParticipantOptions(); 
+            // Important: If an active filter was removed because its type is no longer available,
+            // we need to re-apply all filters to update the calendar.
+            // However, applyFilters will be called by handleCheckboxChange anyway.
         }
-        eventTypeFilterEl.removeEventListener('change', handleEventTypeFilterChange);
-        eventTypeFilterEl.addEventListener('change', handleEventTypeFilterChange);
     }
 
+    // Populate Churches (this part's logic remains unchanged)
     if (churchFilterEl) {
+        const currentSelectedChurch = churchFilterEl.value; // Preserve selection if possible
         churchFilterEl.innerHTML = '<option value="">-- Select Church --</option>';
         if (allChurchesData && allChurchesData.length > 0) {
             allChurchesData.sort((a, b) => ((a?a.ChurchName:"") || "").localeCompare((b?b.ChurchName:"") || "")).forEach(church => {
-                if (church && church.ChurchID && church.ChurchName) churchFilterEl.add(new Option(church.ChurchName, church.ChurchID));
+                if (church && church.ChurchID && church.ChurchName) {
+                     const option = new Option(church.ChurchName, church.ChurchID);
+                     churchFilterEl.add(option);
+                }
             });
+            // Try to restore selection if it's still a valid option
+            if (Array.from(churchFilterEl.options).some(opt => opt.value === currentSelectedChurch)) {
+                churchFilterEl.value = currentSelectedChurch;
+            }
         }
-        churchFilterEl.removeEventListener('change', handleChurchFilterChange);
-        churchFilterEl.addEventListener('change', handleChurchFilterChange);
     }
     
+    // Update Participant Options (this will be re-evaluated based on current event types)
     updateParticipantOptions(); 
-    if (participantFilterEl) {
-        participantFilterEl.removeEventListener('change', handleParticipantFilterChange);
-        participantFilterEl.addEventListener('change', handleParticipantFilterChange);
-    }
-
-    if (expandSeriesFilterEl) {
-        expandSeriesFilterEl.removeEventListener('change', applyFilters); 
-        expandSeriesFilterEl.addEventListener('change', applyFilters);
-    }
 }
+// --- END REPLACEMENT ---
 
-function handleAddFilter(category, value) { 
+
+// --- NEW FUNCTION ---
+function handleCheckboxChange() {
+    populateFilterDropdowns(); // Update dropdowns and potentially prune active eventType filters
+    applyFilters();            // Then re-apply all filters to the calendar
+}
+// --- END NEW FUNCTION ---
+
+function handleAddFilter(category, value) { /* ... This function remains the same from your file, ensure it clears category for single-select like behavior ... */
     if (!value || value === "") { 
         if (activeFilters[category].size > 0) { 
             activeFilters[category].clear();
@@ -351,149 +343,79 @@ function handleAddFilter(category, value) {
         if (filterDropdown) filterDropdown.selectedIndex = 0;
         return; 
     }
-    const storeValue = value; 
-    let changed = false;
-    if (activeFilters[category].has(storeValue)) {
-        const filterDropdown = document.getElementById(category + 'Filter');
-        if (filterDropdown) filterDropdown.selectedIndex = 0; 
-        return; 
-    }
-    activeFilters[category].add(storeValue);
-    changed = true;
-    if (changed) {
-        if (category === 'eventType') {
-            if (activeFilters.participant.size > 0) activeFilters.participant.clear(); 
-            updateParticipantOptions(); 
-        }
-        renderActiveFilterTags();
-        applyFilters();
-    }
-    const filterDropdown = document.getElementById(category + 'Filter');
-    if (filterDropdown) filterDropdown.selectedIndex = 0;
-}
+    // For dropdowns acting as "add filter" buttons (single select tag for category)
+    activeFilters[category].clear(); 
+    activeFilters[category].add(value);
 
-function handleRemoveFilter(category, value) {
+    if (category === 'eventType') {
+        updateParticipantOptions(); 
+    }
+    renderActiveFilterTags();
+    applyFilters();
+    
+    const filterDropdown = document.getElementById(category + 'Filter');
+    if (filterDropdown) filterDropdown.selectedIndex = 0; // Reset dropdown after adding tag
+}
+function handleRemoveFilter(category, value) { 
     if (activeFilters[category] && activeFilters[category].has(value)) { 
         activeFilters[category].delete(value);
         renderActiveFilterTags(); 
         if (category === 'eventType') {
             updateParticipantOptions(); 
+            // After removing an event type, the dropdown options might need to refresh
+            // if the removed type was the *only* one making other types visible.
+            // However, populateFilterDropdowns is now primarily called by checkbox changes.
+            // For simplicity, we might not need to call populateFilterDropdowns here unless issues arise.
         }
         applyFilters();
     }
 }
-
 function handleEventTypeFilterChange(e) { if(e.target) handleAddFilter('eventType', e.target.value); }
 function handleChurchFilterChange(e) { if(e.target) handleAddFilter('church', e.target.value); }
 function handleParticipantFilterChange(e) { if(e.target) handleAddFilter('participant', e.target.value); }
 
-function applyFilters() {
+function applyFilters() { /* ... This function remains the same from your file, including the "Include Regular Services" check ... */ 
     const loadingIndicator = document.getElementById('loading-indicator');
     if (loadingIndicator) loadingIndicator.style.display = 'block';
-
     setTimeout(() => {
-        let eventsToDisplay = processDataForCalendar();
-        
-        // --- START DEBUG LOGS ---
-        //console.log("APPLYFILTERS --- START ---");
-        const getParentPlaceholders = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-parent'));
-        const getRegularServices = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('regular-'));
-        const getSeriesInstances = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-series-instance'));
-        const getSingleSpecial = (arr) => arr.filter(e => e.extendedProps.sourceType && e.extendedProps.sourceType.startsWith('special-event-single'));
-
-        //console.log(`APPLYFILTERS: Initial from processDataForCalendar: ${eventsToDisplay.length} events.`);
-        //console.log(`  Initial - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-        //console.log(`  Initial - Regular Services: ${getRegularServices(eventsToDisplay).length}`);
-        //console.log(`  Initial - Series Instances: ${getSeriesInstances(eventsToDisplay).length}`);
-        //console.log(`  Initial - Single Special: ${getSingleSpecial(eventsToDisplay).length}`);
-
-
-        const activeFiltersState = {};
-        for (const category in activeFilters) {
-            activeFiltersState[category] = Array.from(activeFilters[category]);
-        }
-        //console.log("APPLYFILTERS: Current Active Filters State:", JSON.stringify(activeFiltersState));
-        // --- END DEBUG LOGS ---
-
+        let eventsToDisplay = processDataForCalendar(); 
         if (activeFilters.eventType.size > 0) {
-            eventsToDisplay = eventsToDisplay.filter(fcEvent =>
-                fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => 
-                    String(fcEvent.extendedProps.EventType || "").trim() === typeFilter
-                )
-            );
-            // --- DEBUG LOG ---
-            //console.log(`APPLYFILTERS: After EventType filter: ${eventsToDisplay.length} events.`);
-            //console.log(`  After EventType - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-            // --- END DEBUG LOG ---
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => String(fcEvent.extendedProps.EventType || "").trim() === typeFilter));
         }
-
         if (activeFilters.church.size > 0) {
-            eventsToDisplay = eventsToDisplay.filter(fcEvent => 
-                fcEvent.extendedProps && [...activeFilters.church].some(churchFilter =>
-                    String(fcEvent.extendedProps.ChurchID || "").trim() === churchFilter
-                )
-            );
-            // --- DEBUG LOG ---
-            //console.log(`APPLYFILTERS: After Church filter: ${eventsToDisplay.length} events.`);
-            //console.log(`  After Church - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-            // --- END DEBUG LOG ---
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => fcEvent.extendedProps && [...activeFilters.church].some(churchFilter => String(fcEvent.extendedProps.ChurchID || "").trim() === churchFilter));
         }
-
         if (activeFilters.participant.size > 0) {
-            eventsToDisplay = eventsToDisplay.filter(fcEvent => {
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => { /* ... your participant filter logic ... */
                 if (!fcEvent.extendedProps || !fcEvent.extendedProps.EventID) return false;
                 const originalEventID = String(fcEvent.extendedProps.EventID).trim(); 
                 const participantsInThisEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === originalEventID);
                 if (participantsInThisEvent.length === 0) return false;
                 return participantsInThisEvent.some(participant => {
-                    if(!participant) return false;
-                    let nameToCheck = null;
-                    if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") {
-                        nameToCheck = String(participant.ParticipantNameOverride).trim();
-                    } else if (participant.MinisterID && allMinistersData) {
+                    if(!participant) return false; let nameToCheck = null;
+                    if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") nameToCheck = String(participant.ParticipantNameOverride).trim();
+                    else if (participant.MinisterID && allMinistersData) {
                         const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
                         if (minister && minister.Name) nameToCheck = String(minister.Name).trim();
-                    } else if (participant.GroupID && allGroupsData && allGroupsData.length > 0) {
+                    } else if (participant.GroupID && allGroupsData) {
                         const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
                         if (group && group.GroupName) nameToCheck = String(group.GroupName).trim();
                     }
                     return nameToCheck && activeFilters.participant.has(nameToCheck);
                 });
             });
-            // --- DEBUG LOG ---
-            //console.log(`APPLYFILTERS: After Participant filter: ${eventsToDisplay.length} events.`);
-            //console.log(`  After Participant - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-            // --- END DEBUG LOG ---
         }
-
         const includeRegularServicesCheckbox = document.getElementById('includeRegularServicesFilter');
-        const regularServicesChecked = includeRegularServicesCheckbox ? includeRegularServicesCheckbox.checked : false; // Default to false if not found
-        // --- DEBUG LOG ---
-        //console.log("APPLYFILTERS: 'Include Regular Services' checkbox checked:", regularServicesChecked);
-        // --- END DEBUG LOG ---
-        
-        if (!regularServicesChecked) { // If "Include Regular Services" is UNCHECKED
-            eventsToDisplay = eventsToDisplay.filter(fcEvent =>
-                fcEvent.extendedProps.sourceType && 
-                fcEvent.extendedProps.sourceType.startsWith('special-event') 
-            );
-            // --- DEBUG LOG ---
-            //console.log(`APPLYFILTERS: After 'Include Regular Services' (if unchecked): ${eventsToDisplay.length} events.`);
-            //console.log(`  After Reg.Svc. (unchecked) - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-            // --- END DEBUG LOG ---
+        const regularServicesChecked = includeRegularServicesCheckbox ? includeRegularServicesCheckbox.checked : false;
+        if (!regularServicesChecked) { 
+            eventsToDisplay = eventsToDisplay.filter(fcEvent => fcEvent.extendedProps.sourceType && fcEvent.extendedProps.sourceType.startsWith('special-event'));
         }
-        
-        // --- DEBUG LOG ---
-        //console.log(`APPLYFILTERS: Final eventsToDisplay for renderCalendar: ${eventsToDisplay.length} events.`);
-        //console.log(`  Final - Parent Placeholders: ${getParentPlaceholders(eventsToDisplay).length}`, JSON.parse(JSON.stringify(getParentPlaceholders(eventsToDisplay).map(e=>e.title))));
-        //console.log("APPLYFILTERS --- END ---");
-        // --- END DEBUG LOGS ---
-
         renderCalendar(eventsToDisplay);
         if (loadingIndicator) loadingIndicator.style.display = 'none';
     }, 10);
 }
 
+// Helper functions (parseSimpleTimeForSort, getBestTimeZoneAbbreviation) remain the same
 function parseSimpleTimeForSort(timeStr) {
     if (!timeStr || typeof timeStr !== 'string') return null;
     const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -571,16 +493,18 @@ async function populateNavbar() {
         // Optionally display an error to the user in the navbar area
     }
 }
-
+// --- MODIFIED: DOMContentLoaded ---
 document.addEventListener('DOMContentLoaded', function() {
-    populateNavbar();
+    populateNavbar(); // Keep this first
+
+    // Setup FullCalendar instance
     var calendarEl = document.getElementById('calendar');
     if (!calendarEl) { console.error("Calendar #calendar not found!"); return; }
     if (typeof FullCalendar === 'undefined') { console.error("FullCalendar library not loaded!"); return; }
     
     const filterCollapseElement = document.getElementById('filterCollapse');
     if (filterCollapseElement && typeof bootstrap !== 'undefined') {
-        filterCollapseInstance = new bootstrap.Collapse(filterCollapseElement, { toggle: false });
+        filterCollapseInstance = new bootstrap.Collapse(filterCollapseElement, { toggle: true }); // Start expanded
     } else if (!filterCollapseElement) { console.warn("#filterCollapse element not found.") }
 
     if (typeof bootstrap !== 'undefined' && document.getElementById('eventDetailModal')) {
@@ -588,7 +512,7 @@ document.addEventListener('DOMContentLoaded', function() {
         catch (e) { console.error("Error initializing Bootstrap modal:", e); }
     } else { console.warn("Bootstrap or #eventDetailModal not found."); }
 
-    calendar = new FullCalendar.Calendar(calendarEl, {
+    calendar = new FullCalendar.Calendar(calendarEl, { 
         initialView: 'listWeek', 
         views: { 
             listDay: { buttonText: 'D' },
@@ -604,13 +528,16 @@ document.addEventListener('DOMContentLoaded', function() {
         timeZone: 'local', 
         events: [], 
         weekends: true,
-        loading: function(isLoading) { /* ... */ },
+        loading: function(isLoading) {
+            const loadingEl = document.getElementById('loading-indicator');
+            if(loadingEl) loadingEl.style.display = isLoading ? 'block' : 'none';
+        },
         datesSet: function(viewInfo) { 
             const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
             if (expandSeriesCheckbox && viewInfo.view.type === 'listDay') {
                 if (!expandSeriesCheckbox.checked) { 
                     expandSeriesCheckbox.checked = true;
-                    applyFilters(); 
+                    handleCheckboxChange(); // Use the new handler
                 }
             }
         },
@@ -751,6 +678,25 @@ document.addEventListener('DOMContentLoaded', function() {
 }
     });
     calendar.render();
-    initializeApp();
-});
+    
+    // Add event listeners to filter dropdowns
+    const eventTypeFilterEl = document.getElementById('eventTypeFilter');
+    const churchFilterEl = document.getElementById('churchFilter');
+    const participantFilterEl = document.getElementById('participantFilter');
+    if(eventTypeFilterEl) eventTypeFilterEl.addEventListener('change', handleEventTypeFilterChange);
+    if(churchFilterEl) churchFilterEl.addEventListener('change', handleChurchFilterChange);
+    if(participantFilterEl) participantFilterEl.addEventListener('change', handleParticipantFilterChange);
 
+    // --- MODIFIED: Add event listeners to checkboxes to use the new handler ---
+    const expandSeriesFilterEl = document.getElementById('expandSeriesFilter'); 
+    const includeRegularServicesFilterEl = document.getElementById('includeRegularServicesFilter');
+    if (expandSeriesFilterEl) {
+        expandSeriesFilterEl.addEventListener('change', handleCheckboxChange);
+    }
+    if (includeRegularServicesFilterEl) {
+        includeRegularServicesFilterEl.addEventListener('change', handleCheckboxChange);
+    }
+    // --- END MODIFIED ---
+
+    initializeApp(); 
+});
