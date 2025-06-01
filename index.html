@@ -15,6 +15,9 @@
             padding-top: 0; /* Adjusted for fixed navbar */
             padding-bottom: 15px;
         }
+        p,ul {
+            margin-bottom: auto;
+        }
         .navbar { /* Ensure navbar is sticky or fixed if you want it always visible */
             /* Example: position: sticky; top: 0; z-index: 1030; */
         }
@@ -236,6 +239,7 @@
         .fc-list-event.event-type-evening .fc-list-event-dot {
             border-color: #ADD8E6 !important;
         }
+
     </style>
 </head>
 <body>
@@ -255,59 +259,10 @@
         <header class="my-3 text-center"> 
             <h1>Church Calendar</h1>
         </header>
-<!--
-        <div class="submit-event-link-container">
-            <a href="https://script.google.com/macros/s/AKfycbwpQPxHSNCpgZ5G20ksEI5dXOUdrsjca5uNyZ556Ag7rLz-QC5hj5FBGNYxZhUVyGcpXg/exec" class="btn btn-primary" target="_blank"> 
-                Submit a New Event
-            </a>
-            <p class="mt-1"><small>Note: Submitted events will be reviewed.</small></p>
-        </div>
--->
+
         <div id="loading-indicator" style="display: none;">Loading events... please wait.</div>
         <div id="error-container" class="alert alert-danger" style="display: none;"></div>
-<!--
-        <aside id="filters" class="mb-3"> 
-            <div class="filters-header">
-                <h2>Filters</h2>
-                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" aria-controls="filterCollapse">
-                    Show/Hide Filters
-                </button>
-            </div>
-            <div class="collapse" id="filterCollapse"> 
-                <div class="row g-3 mt-2"> 
-                      <div class="form-check mt-3 mb-2">
-                <input class="form-check-input" type="checkbox" value="" id="expandSeriesFilter">
-                <label class="form-check-label" for="expandSeriesFilter">
-                    Show Detailed Series Schedules
-                </label>
-            </div>
-            <div id="activeFiltersContainer" style="display: none;">
-                
-            </div>
-                    <div class="col-12 col-md-4 filter-item">
-                        <label for="eventTypeFilter" class="form-label">Add Event Type Filter:</label>
-                        <select id="eventTypeFilter" class="form-select form-select-sm"> 
-                            <option value="">-- Select Type --</option> 
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-4 filter-item">
-                        <label for="churchFilter" class="form-label">Add Church Filter:</label>
-                        <select id="churchFilter" class="form-select form-select-sm"> 
-                            <option value="">-- Select Church --</option>
-                        </select>
-                    </div>
-                    <div class="col-12 col-md-4 filter-item">
-                        <label for="participantFilter" class="form-label">Add Minister/Group Filter:</label>
-                        <select id="participantFilter" class="form-select form-select-sm"> 
-                            <option value="">-- Select Participant --</option>
-                        </select>
-                    </div>
-                </div>
-                <div id="activeFiltersContainer">
-                </div>
-            </div>
-        </aside>
-    -->
+
         <aside id="filters" class="mb-3">
             <div class="filters-header">
                 <h2>Filters</h2>
@@ -367,21 +322,28 @@
         </main>
 
         <div class="modal fade" id="eventDetailModal" tabindex="-1" aria-labelledby="eventDetailModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="eventDetailModalLabel">Event Details</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body" id="eventDetailBody">
-                        <p>Loading details...</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    </div>
-                </div>
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventDetailModalLabel">Event Details</h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary ms-auto me-2" id="printEventDetailButton" title="Print Event Details">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-printer" viewBox="0 0 16 16">
+                        <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1z"/>
+                        <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2H5zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1z"/>
+                    </svg>
+                    Print
+                </button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="eventDetailBody">
+                <p>Loading details...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
+    </div>
+</div>
 
     </div> 
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.17/index.global.min.js'></script>

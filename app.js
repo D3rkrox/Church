@@ -177,12 +177,12 @@ async function initializeApp() {
         allServiceSchedulePatterns = servicePatterns || []; 
         allGroupMembersData = groupMembers || [];
 
-        console.log("initializeApp - Raw allEventsData from API:", JSON.parse(JSON.stringify(allEventsData)));
+        //console.log("initializeApp - Raw allEventsData from API:", JSON.parse(JSON.stringify(allEventsData)));
 // Log specifically for special event types
 const specialParents = allEventsData.filter(e => e.sourceType === 'special-event-series-parent');
 const specialInstances = allEventsData.filter(e => e.sourceType === 'special-event-series-instance');
 const specialSingles = allEventsData.filter(e => e.sourceType === 'special-event-single');
-console.log(`Found ${specialParents.length} special series parents, ${specialInstances.length} special instances, ${specialSingles.length} single special events in raw data.`);
+//console.log(`Found ${specialParents.length} special series parents, ${specialInstances.length} special instances, ${specialSingles.length} single special events in raw data.`);
         populateFilterDropdowns(); // Call this first
         applyFilters();            // Then apply filters for initial render
 
@@ -622,130 +622,196 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const props = info.event.extendedProps || {};
-    const eventTitle = info.event.title || "Event Details";
-    let detailsHtml = `<h4>${eventTitle}</h4>`;
+    const originalEventTitle = props.EventTitle || info.event.title || "Event Details"; // Use original title from props
+    const eventTypeDisplay = props.EventType || 'N/A'; // Use original EventType from props
+
+    // Update modal title using original data if needed, or keep it generic
+    // document.getElementById('eventDetailModalLabel').textContent = originalEventTitle; 
+
+    let detailsHtml = `<h4>${originalEventTitle} (${eventTypeDisplay})</h4>`;
     
     const displayTimeZone = props.eventActualTimeZone || 'UTC'; 
-    let timeZoneAbbreviation = '';
+    // getBestTimeZoneAbbreviation should use info.event.start which is a JS Date object
+    let timeZoneAbbreviation = info.event.start ? getBestTimeZoneAbbreviation(info.event.start, displayTimeZone) : ''; 
 
-    if (info.event.start) {
-        const eventDateObj = info.event.start;
-        // *** Use our new, more reliable helper function ***
-        timeZoneAbbreviation = getBestTimeZoneAbbreviation(eventDateObj, displayTimeZone);
+    // --- REVISED "WHEN" LINE LOGIC ---
+    let whenLine = "Date N/A";
+    if (info.event.start) { // info.event.start is a JavaScript Date object in the calendar's local timezone
+        const startDate = info.event.start;
+        const isEventAllDay = info.event.allDay; // Use FullCalendar's processed allDay property for this event instance
 
-        const datePartModal = eventDateObj.toLocaleDateString('en-US', { timeZone: displayTimeZone, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        let timePartModal = "";
+        const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', timeZone: displayTimeZone };
+        const timeOptions = { hour: 'numeric', minute: '2-digit', timeZone: displayTimeZone };
         
-        if (!info.event.allDay) { 
-             timePartModal = eventDateObj.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric'});
-        }
-
-        const startDisplayStr = `${datePartModal}${timePartModal ? ' at ' + timePartModal : ''} ${timeZoneAbbreviation}`;
-        detailsHtml += `<p><strong>When:</strong> ${startDisplayStr}</p>`;
+        let startDateFormatted = startDate.toLocaleDateString('en-US', dateOptions);
         
-        const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        if (displayTimeZone !== browserTimeZone && !info.event.allDay) {
-            detailsHtml += `<p><small>(Your local time: ${info.event.start.toLocaleString()})</small></p>`;
+        if (isEventAllDay) {
+            whenLine = startDateFormatted; // Start with the first day
+            if (info.event.end) {
+                let endDateForDisplay = new Date(info.event.end.getTime()); // Clone FullCalendar's end date
+                endDateForDisplay.setDate(endDateForDisplay.getDate() - 1); // Make it inclusive for display
+
+                // Check if it's truly a multi-day event after making end inclusive
+                if (endDateForDisplay.getTime() > startDate.getTime()) {
+                    let endDateFormatted = endDateForDisplay.toLocaleDateString('en-US', dateOptions);
+                    whenLine += ` to ${endDateFormatted}`;
+                }
+            }
+            whenLine += ` (${timeZoneAbbreviation})`;
+        } else { // Timed event
+            let startTimeFormatted = startDate.toLocaleTimeString('en-US', timeOptions);
+            whenLine = `${startDateFormatted}, ${startTimeFormatted}`;
+
+            if (info.event.end && info.event.end.getTime() > startDate.getTime()) {
+                const endDate = info.event.end;
+                let endDateFormatted = endDate.toLocaleDateString('en-US', dateOptions);
+                let endTimeFormatted = endDate.toLocaleTimeString('en-US', timeOptions);
+
+                if (startDate.toDateString() === endDate.toDateString()) { // Same day, different end time
+                    whenLine += ` - ${endTimeFormatted}`;
+                } else { // Different day
+                    whenLine += ` to ${endDateFormatted}, ${endTimeFormatted}`;
+                }
+            }
+            whenLine += ` ${timeZoneAbbreviation}`;
         }
-    } else { 
-        detailsHtml += `<p><strong>Date:</strong> N/A</p>`; 
     }
+    detailsHtml += `<p><strong>When:</strong> ${whenLine}</p>`;
+    // --- END REVISED "WHEN" ---
 
-    if (info.event.end && !info.event.allDay) {
-        const endDisplayStr = info.event.end.toLocaleTimeString('en-US', { timeZone: displayTimeZone, hour: 'numeric', minute: 'numeric'});
-        detailsHtml += `<p><strong>End:</strong> ${endDisplayStr} ${timeZoneAbbreviation}</p>`;
-    }
-    
-    detailsHtml += `<p><strong>Type:</strong> ${props.EventType || 'N/A'}</p>`;
+        // --- FEATURING (MODIFIED FOR COLLAPSIBLE GROUP MEMBERS) ---
+    const participantsForEvent = (allEventParticipantsData || []).filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
+    if (participantsForEvent.length > 0) {
+        detailsHtml += `<p><strong>Featuring:</strong></p><ul>`;
+        participantsForEvent.forEach((participant, pIndex) => {
+            if(!participant) return; 
+            
+            let name = participant.ParticipantNameOverride ? String(participant.ParticipantNameOverride).trim() : null;
+            let role = participant.RoleInEvent ? `(${String(participant.RoleInEvent).trim()})` : ''; 
+            let associatedChurchDisplay = ''; // To store [Church Name] for minister or group
+            let isCollapsibleGroupWithMembers = false;
+            let collapseId = '';
+            let membersListHtml = '';
 
-    // --- SCHEDULE (from patterns) / DESCRIPTION DISPLAY ---
-    const originalEventID = props.EventID;
-    const patternsForThisEvent = allServiceSchedulePatterns.filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
+            if (participant.MinisterID && allMinistersData) { 
+                const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
+                if (minister) { 
+                    name = minister.Name ? String(minister.Name).trim() : 'Minister Name Missing'; 
+                    // Get minister's home church name
+                    if (minister.ChurchID && allChurchesData) {
+                        const homeChurch = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(minister.ChurchID).trim());
+                        if (homeChurch && homeChurch.ChurchName) {
+                            associatedChurchDisplay = ` <small class="text-muted">[${homeChurch.ChurchName.trim()}]</small>`;
+                        }
+                    }
+                } else { name = name || 'Minister (ID Not Found)'; }
+            } else if (participant.GroupID && allGroupsData) { 
+                const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
+                if (group) { 
+                    name = group.GroupName ? String(group.GroupName).trim() : 'Unnamed Group'; 
+                    // Get group's associated church name
+                    if (group.AssociatedChurchID && allChurchesData) {
+                        const assocChurch = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(group.AssociatedChurchID).trim());
+                        if (assocChurch && assocChurch.ChurchName) {
+                            associatedChurchDisplay = ` <small class="text-muted">[${assocChurch.ChurchName.trim()}]</small>`;
+                        }
+                    }
+                    // Group members collapsible logic
+                    if (allGroupMembersData && allGroupMembersData.length > 0) {
+                        const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
+                        if (members.length > 0) {
+                            isCollapsibleGroupWithMembers = true;
+                            collapseId = `group-members-${props.EventID.replace(/[^a-zA-Z0-9]/g, "")}-${participant.GroupID.replace(/[^a-zA-Z0-9]/g, "")}-${pIndex}`;
+                            
+                            membersListHtml = '<ul class="list-unstyled ms-3 mt-1 small">';
+                            members.forEach(member => {
+                                membersListHtml += `<li>${member.MemberName || 'Unknown Member'}</li>`;
+                            });
+                            membersListHtml += '</ul>';
+                        }
+                    }
+                } else { name = name || 'Group (ID Not Found)'; }
+            }
+            
+            name = name || 'N/A'; 
 
-    if (patternsForThisEvent.length > 0) {
-        detailsHtml += `<p><strong>Schedule (${timeZoneAbbreviation}):</strong></p>`; // Use the reliable abbreviation
-        const patternsByDay = {};
-        patternsForThisEvent.forEach(p => {
-            if(!p.DayOfWeek) return;
-            if(!patternsByDay[p.DayOfWeek]) patternsByDay[p.DayOfWeek] = [];
-            patternsByDay[p.DayOfWeek].push(p);
-        });
-
-        const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Weekdays"];
-        let scheduleContent = "<ul>";
-        dayOrder.forEach(dayKey => {
-            if (patternsByDay[dayKey] && patternsByDay[dayKey].length > 0) {
-                scheduleContent += `<li><strong>${dayKey}:</strong><ul>`;
-                patternsByDay[dayKey]
-                    .sort((a,b) => (parseSimpleTimeForSort(a.ServiceStartTime) || 0) - (parseSimpleTimeForSort(b.ServiceStartTime) || 0)) // Using your existing time sort function
-                    .forEach(p => {
-                        let patternTimeDisplay = p.ServiceStartTime || '';
-                        if (p.ServiceEndTime) patternTimeDisplay += ` - ${p.ServiceEndTime}`;
-                        scheduleContent += `<li>${patternTimeDisplay || 'N/A'}: ${p.ServiceSubTitle || 'Service'}</li>`;
-                    });
-                scheduleContent += `</ul></li>`;
+            if (isCollapsibleGroupWithMembers) {
+                detailsHtml += `<li>
+                    <a href="#${collapseId}" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="${collapseId}" class="text-decoration-none fw-bold">
+                        ${name}
+                    </a>
+                    ${associatedChurchDisplay} ${role} 
+                    <div class="collapse" id="${collapseId}">
+                        ${membersListHtml}
+                    </div>
+                </li>`;
+            } else { 
+                detailsHtml += `<li>${name}${associatedChurchDisplay} ${role}</li>`;
             }
         });
-        scheduleContent += "</ul>";
-        detailsHtml += scheduleContent;
+        detailsHtml += `</ul>`;
     }
-    
-    let descriptionText = (props.Description || '').replace(/\n/g, '<br>');
-    if (descriptionText.trim() !== "") {
-        detailsHtml += `<h6 class="mt-3">Additional Details:</h6><p>${descriptionText}</p>`;
-    } else if (patternsForThisEvent.length === 0) { 
-        detailsHtml += `<p><strong>Description:</strong> None</p>`;
-    }
-    
-    // ... (The rest of your eventClick function for Church and Participants remains the same) ...
+
+    // --- LOCATION (Church Name) ---
     const church = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(props.ChurchID).trim());
     if (church) { 
         const encodedAddress = encodeURIComponent(church.Address);
         detailsHtml += `<p><strong>Church:</strong> ${church.ChurchName||'N/A'}</p>`;
         detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||`<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`||'N/A'}</p>`;
+        if (props.LocationOverride && String(props.LocationOverride).trim() !== "") {
+            detailsHtml += ` (${props.LocationOverride.trim()})`;
+        }
+        detailsHtml += `</p>`;
+    } else if (props.LocationOverride && String(props.LocationOverride).trim() !== "") {
+         detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride.trim()}</p>`;
     }
 
-    const participantsForEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
-    if (participantsForEvent.length > 0) {
-      // (Your existing participant logic goes here, it does not need to change)
-        detailsHtml += `<p><strong>Featuring:</strong></p><ul>`;
-        participantsForEvent.forEach(participant => {
-            if(!participant) return; 
-            let name = null; 
-            let role = participant.RoleInEvent ? String(participant.RoleInEvent).trim() : ''; 
-            let pChurchName = null; 
-            let groupMembersHtml = '';
-            if (participant.MinisterID) { 
-                const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
-                if (minister) { 
-                    name = minister.Name ? String(minister.Name).trim() : 'M. Name?'; 
-                    pChurchName = minister.ChurchName ? String(minister.ChurchName).trim() : null;
-                } else { name = 'M. ID?'; }
-            } else if (participant.GroupID && allGroupsData && allGroupsData.length > 0) { 
-                const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
-                if (group) { 
-                    name = group.GroupName ? String(group.GroupName).trim() : 'G. Name?'; 
-                    if (group.AssociatedChurchID && allChurchesData) { 
-                        const c = allChurchesData.find(ch => ch && String(ch.ChurchID).trim() === String(group.AssociatedChurchID).trim()); 
-                        if (c) pChurchName = c.ChurchName ? String(c.ChurchName).trim() : null;
-                    }
-                    if (allGroupMembersData && allGroupMembersData.length > 0) {
-                        const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
-                        if (members.length > 0) {
-                            groupMembersHtml = '<br/><small>Members:<ul>';
-                            members.forEach(member => {
-                                groupMembersHtml += `<li><small>${member.MemberName || 'Unknown Member'}</small></li>`;
-                            });
-                            groupMembersHtml += '</ul></small>';
-                        }
-                    }
-                } else { name = 'G. ID?'; }
-            } else if (participant.ParticipantNameOverride && String(participant.ParticipantNameOverride).trim() !== "") { 
-                name = String(participant.ParticipantNameOverride).trim(); 
-            }
-            detailsHtml += `<li>${name||'N/A'} ${pChurchName?`[${pChurchName}]`:''} ${role?`(${role})`:''} ${groupMembersHtml}</li>`;
-        });
-        detailsHtml += `</ul>`;
+    // --- SCHEDULE (from patterns if IsSeriesParent) ---
+    // This 'patternsForThisEvent' uses 'props.EventID' which is correct.
+    let patternsForThisEvent = []; 
+    if (String(props.IsSeriesParent).toLowerCase() === 'true') {
+        const originalEventID = props.EventID; 
+        patternsForThisEvent = (allServiceSchedulePatterns || []).filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
+
+        if (patternsForThisEvent.length > 0) {
+            detailsHtml += `<p class="mt-3"><strong>Schedule :</strong></p><ul>`;
+            const patternsByDay = {};
+            patternsForThisEvent.forEach(p => { 
+                if(!p.DayOfWeek) return; 
+                if(!patternsByDay[p.DayOfWeek]) patternsByDay[p.DayOfWeek] = []; 
+                patternsByDay[p.DayOfWeek].push(p); 
+            });
+            const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Weekdays"];
+            dayOrder.forEach(dayKey => {
+                if (patternsByDay[dayKey] && patternsByDay[dayKey].length > 0) {
+                    detailsHtml += `<li><strong>${dayKey}:</strong><ul>`;
+                    patternsByDay[dayKey].sort((a,b) => (parseSimpleTimeForSort(a.ServiceStartTime) || 0) - (parseSimpleTimeForSort(b.ServiceStartTime) || 0))
+                        .forEach(p => {
+                            let patternTimeDisplay = p.ServiceStartTime || '';
+                            if (p.ServiceEndTime) patternTimeDisplay += ` - ${p.ServiceEndTime}`;
+                                if (p.ServiceSubTitle) {
+                                    detailsHtml += `<li>${patternTimeDisplay || 'Time N/A'}: ${p.ServiceSubTitle || 'Service'}</li>`;
+                                } else {
+                                    detailsHtml += `<li>${patternTimeDisplay || 'Time N/A'} (${timeZoneAbbreviation})</li>`;
+                                }
+                        });
+                    detailsHtml += `</ul></li>`;
+                }
+            });
+            detailsHtml += `</ul>`;
+        }
+    } 
+    
+    // --- Overall Description ---
+    let descriptionText = (props.Description || '').replace(/\n/g, '<br>');
+    if (descriptionText.trim() !== "") {
+        if (String(props.IsSeriesParent).toLowerCase() === 'true' && patternsForThisEvent.length > 0) {
+             detailsHtml += `<p class="mt-3"><strong>Overall Notes:</strong><br>${descriptionText}</p>`;
+        } else {
+             detailsHtml += `<p class="mt-3"><strong>Description:</strong><br>${descriptionText}</p>`;
+        }
+    } else if (patternsForThisEvent.length === 0) { 
+        detailsHtml += `<p class="mt-3"><strong>Description:</strong> None</p>`;
     }
     
     document.getElementById('eventDetailBody').innerHTML = detailsHtml;
@@ -774,4 +840,37 @@ document.addEventListener('DOMContentLoaded', function() {
     // --- END MODIFIED ---
 
     initializeApp(); 
+    const printButton = document.getElementById('printEventDetailButton');
+    if (printButton) {
+        printButton.addEventListener('click', function() {
+            const modalBodyContent = document.getElementById('eventDetailBody').innerHTML;
+            const modalTitle = document.getElementById('eventDetailModalLabel').textContent;
+
+            const printWindow = window.open('', '_blank', 'height=600,width=800');
+            printWindow.document.write('<html><head><title>' + modalTitle + '</title>');
+            // Add some basic print-friendly styles
+            printWindow.document.write(`
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    h4 { margin-top: 0; }
+                    p { margin-bottom: 0.5em; }
+                    ul { padding-left: 20px; margin-top: 0.25em; }
+                    li { margin-bottom: 0.25em; }
+                    hr { margin: 1em 0; }
+                    /* Add any other styles you want for the printout */
+                </style>
+            `);
+            printWindow.document.write('</head><body>');
+            printWindow.document.write(modalBodyContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close(); // Important for some browsers
+
+            // Wait for content to load before printing for some browsers
+            setTimeout(function() {
+                printWindow.focus();  // Required for some browsers
+                printWindow.print();
+                // printWindow.close(); // Close automatically after print dialog (optional)
+            }, 250); // Adjust delay if needed
+        });
+    }
 });
