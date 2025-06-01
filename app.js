@@ -76,7 +76,137 @@ async function fetchData(sheetName) {
         return [];
     }
 }
+/*
+function processDataForCalendar() {
+    let processedEvents = [];
+    const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
+    const showExpandedSeries = expandSeriesCheckbox ? expandSeriesCheckbox.checked : false;
 
+    const currentViewType = calendar && calendar.view ? calendar.view.type : 'listWeek'; 
+    const isListView = currentViewType.startsWith('list');
+
+    // console.log(`VIEW_DEBUG: CurrentView='${currentViewType}', IsListView=${isListView}, ShowExpandedSeries=${showExpandedSeries}`);
+
+    allEventsData.forEach((event, index) => {
+        if (!event || !event.EventTitle || !event.StartDate) {
+            return;
+        }
+
+        const eventSourceType = String(event.sourceType || '').trim();
+        const originalIsAllDay = String(event.IsAllDay).toLowerCase() === "true";
+        
+        const colors = getEventColors(event.EventType);
+        const eventClass = getEventTypeClassName(event.EventType);
+
+        // Start with a base FullCalendar event object
+        let fcEventData = {
+            title: event.EventTitle,
+            start: event.StartDate, // Initially UTC ISO string from cache
+            end: event.EndDate,     // Initially UTC ISO string from cache
+            allDay: originalIsAllDay,
+            timeZone: originalIsAllDay ? undefined : (event.eventActualTimeZone || 'America/Chicago'),
+            backgroundColor: colors.backgroundColor,
+            borderColor: colors.backgroundColor, // Or a slightly darker shade for contrast
+            textColor: colors.textColor,
+            classNames: [eventClass],
+            extendedProps: { ...event, isPlaceholder: false } 
+        };
+
+        let addThisEvent = false;
+
+        if (eventSourceType.startsWith('special-event-series-parent')) {
+            // Parent series summaries are always treated as all-day for display purposes in the calendar
+            fcEventData.allDay = true; 
+            fcEventData.timeZone = undefined; // All-day events should use the calendar's local timezone for date rendering
+            fcEventData.extendedProps.isPlaceholder = true;
+
+            // Title formatting for the series summary
+            let seriesActualStartStrForTitle = event.StartDate ? event.StartDate.substring(0, 10) : null;
+            let seriesActualEndExclusiveStrForTitle = event.EndDate ? event.EndDate.substring(0, 10) : null;
+            let titleDisplay = `${event.EventTitle} (${event.EventType || 'Series'})`;
+
+            if (seriesActualStartStrForTitle && seriesActualEndExclusiveStrForTitle) {
+                // Create Date objects in UTC to correctly get the date parts
+                let inclusiveEndDateForTitle = new Date(seriesActualEndExclusiveStrForTitle + "T00:00:00Z"); // Treat as start of exclusive end day
+                inclusiveEndDateForTitle.setUTCDate(inclusiveEndDateForTitle.getUTCDate() - 1); // Make it inclusive
+
+                const titleDateOptions = { month: 'short', day: 'numeric', timeZone: 'UTC' }; // Display title dates as per their UTC day
+                const startTitleStr = new Date(seriesActualStartStrForTitle + "T00:00:00Z").toLocaleDateString('en-US', titleDateOptions);
+                
+                if (inclusiveEndDateForTitle.getTime() >= new Date(seriesActualStartStrForTitle + "T00:00:00Z").getTime()) {
+                    const endTitleStr = inclusiveEndDateForTitle.toLocaleDateString('en-US', titleDateOptions);
+                    if (startTitleStr !== endTitleStr) {
+                        titleDisplay += ` [${startTitleStr} - ${endTitleStr}]`;
+                    } else {
+                        titleDisplay += ` [${startTitleStr}]`;
+                    }
+                } else { 
+                    titleDisplay += ` [${startTitleStr}]`;
+                }
+            } else if (seriesActualStartStrForTitle) {
+                const titleDateOptions = { month: 'short', day: 'numeric', timeZone: 'UTC' };
+                const startTitleStr = new Date(seriesActualStartStrForTitle + "T00:00:00Z").toLocaleDateString('en-US', titleDateOptions);
+                titleDisplay += ` [${startTitleStr}]`;
+            }
+            fcEventData.title = titleDisplay;
+
+            // Logic for adding the event
+            if (isListView) {
+                addThisEvent = true; 
+                // For list view, the parent event (which is all-day) will use its full StartDate and EndDate.
+                // FullCalendar's list view will show it on each day it spans.
+            } else { // For GRID views
+                if (!showExpandedSeries) { 
+                    addThisEvent = true;
+                    // For grid view placeholder, it also uses its full StartDate and EndDate.
+                }
+                // If series IS expanded in grid view, parent is NOT added (instances will be).
+            }
+        } else if (eventSourceType.startsWith('special-event-series-instance')) {
+            if (!isListView && showExpandedSeries) {
+                addThisEvent = true;
+            }
+        } else if (eventSourceType.startsWith('regular-')) {
+            addThisEvent = true;
+        } else if (eventSourceType.startsWith('special-event-single')) {
+            addThisEvent = true;
+        } else { 
+            // Fallback for older data without sourceType
+            if (String(event.IsSeriesParent).toLowerCase() !== "true" && String(event.isGeneratedInstance).toLowerCase() !== "true") {
+                addThisEvent = true; 
+                if (fcEventData.allDay) fcEventData.timeZone = undefined;
+            }
+        }
+
+        if (addThisEvent) {
+            // Final date formatting for allDay events to YYYY-MM-DD
+            if (fcEventData.allDay) {
+                fcEventData.timeZone = undefined; 
+                if (fcEventData.start && typeof fcEventData.start === 'string' && fcEventData.start.includes('T')) {
+                    fcEventData.start = fcEventData.start.substring(0, 10);
+                }
+                if (fcEventData.end && typeof fcEventData.end === 'string' && fcEventData.end.includes('T')) {
+                    fcEventData.end = fcEventData.end.substring(0, 10);
+                }
+                // Ensure single all-day events (or placeholders forced to single day in list view previously)
+                // have a valid exclusive end if 'end' was null or same as 'start'.
+                if (fcEventData.start && fcEventData.start.length === 10 && 
+                    (!fcEventData.end || fcEventData.end === fcEventData.start || new Date(fcEventData.end) <= new Date(fcEventData.start))) {
+                    // This condition is primarily for true single-day all-day events.
+                    // Multi-day series parents should already have a correct exclusive end from cache.
+                    if (!eventSourceType.startsWith('special-event-series-parent') || isListView) { // Avoid re-adjusting already correct series parent end for grid
+                        let tempEndDate = new Date(fcEventData.start.replace(/-/g, '/'));
+                        tempEndDate.setDate(tempEndDate.getDate() + 1);
+                        fcEventData.end = tempEndDate.toISOString().substring(0,10);
+                    }
+                }
+            }
+            processedEvents.push(fcEventData);
+        }
+    });
+    return processedEvents;
+}
+*/
 function processDataForCalendar() {
     let processedEvents = [];
     const expandSeriesCheckbox = document.getElementById('expandSeriesFilter');
@@ -615,89 +745,113 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         },
-        eventClick: function(info) {
+eventClick: function(info) {
     if (!eventDetailModalInstance) {
+        // Fallback if bootstrap modal instance isn't ready
         alert(`Event: ${info.event.title}\nStart: ${info.event.start ? info.event.start.toLocaleString() : 'N/A'}`);
         return;
     }
 
     const props = info.event.extendedProps || {};
-    const originalEventTitle = props.EventTitle || info.event.title || "Event Details"; // Use original title from props
-    const eventTypeDisplay = props.EventType || 'N/A'; // Use original EventType from props
+    const originalEventTitle = props.EventTitle || info.event.title || "Event Details";
+    const eventTypeDisplay = props.EventType || 'N/A';
 
-    // Update modal title using original data if needed, or keep it generic
-    // document.getElementById('eventDetailModalLabel').textContent = originalEventTitle; 
+    // Update modal title directly (optional, if you want modal title bar to also change)
+    // const modalLabel = document.getElementById('eventDetailModalLabel');
+    // if (modalLabel) modalLabel.textContent = originalEventTitle;
 
-    let detailsHtml = `<h4>${originalEventTitle} (${eventTypeDisplay})</h4>`;
+    let detailsHtml = `<h4 class="mb-3">${originalEventTitle} <span class="badge bg-secondary">${eventTypeDisplay}</span></h4>`;
     
     const displayTimeZone = props.eventActualTimeZone || 'UTC'; 
-    // getBestTimeZoneAbbreviation should use info.event.start which is a JS Date object
     let timeZoneAbbreviation = info.event.start ? getBestTimeZoneAbbreviation(info.event.start, displayTimeZone) : ''; 
 
-    // --- REVISED "WHEN" LINE LOGIC ---
-    let whenLine = "Date N/A";
-    if (info.event.start) { // info.event.start is a JavaScript Date object in the calendar's local timezone
-        const startDate = info.event.start;
-        const isEventAllDay = info.event.allDay; // Use FullCalendar's processed allDay property for this event instance
+    // Icons (Bootstrap Icons SVGs)
+    const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-calendar3 me-2" viewBox="0 0 16 16"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857z"/><path d="M6.5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`;
+    const peopleIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-people-fill me-2" viewBox="0 0 16 16"><path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/><path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg>`;
+    const locationIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt-fill me-2" viewBox="0 0 16 16"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`;
+    const scheduleIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-list-stars me-2" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"/><path d="M2.866 14.85c-.078.444.36.791.746.593l4.39-2.256 4.389 2.256c.386.198.824-.149.746-.592l-.83-4.73 3.522-3.356c.33-.314.16-.888-.282-.95l-4.898-.696L8.465.792a.513.513 0 0 0-.927 0L5.354 5.12l-4.898.696c-.441.062-.612.636-.283.95l3.523 3.356-.83 4.73zm4.905-2.767-3.686 1.894.694-3.957a.565.565 0 0 0-.163-.505L1.71 6.745l4.052-.576a.525.525 0 0 0 .393-.288L8 2.223l1.847 3.658a.525.525 0 0 0 .393.288l4.052.575-2.906 2.77a.565.565 0 0 0-.163.506l.694 3.957-3.686-1.894a.503.503 0 0 0-.461 0z"/></svg>`;
+    const descriptionIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-file-text-fill me-2" viewBox="0 0 16 16"><path d="M12 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM5 4h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1zm-.5 2.5A.5.5 0 0 1 5 6h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zM5 9h6a.5.5 0 0 1 0 1H5a.5.5 0 0 1 0-1z"/></svg>`;
 
+
+    // --- WHEN ---
+    let whenLine = "Date N/A";
+    if (info.event.start) {
+        const startDate = info.event.start;
+        const isEventAllDay = info.event.allDay; 
         const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', timeZone: displayTimeZone };
         const timeOptions = { hour: 'numeric', minute: '2-digit', timeZone: displayTimeZone };
-        
         let startDateFormatted = startDate.toLocaleDateString('en-US', dateOptions);
         
         if (isEventAllDay) {
-            whenLine = startDateFormatted; // Start with the first day
+            whenLine = startDateFormatted; 
             if (info.event.end) {
-                let endDateForDisplay = new Date(info.event.end.getTime()); // Clone FullCalendar's end date
-                endDateForDisplay.setDate(endDateForDisplay.getDate() - 1); // Make it inclusive for display
-
-                // Check if it's truly a multi-day event after making end inclusive
+                let endDateForDisplay = new Date(info.event.end.getTime()); 
+                endDateForDisplay.setUTCDate(endDateForDisplay.getUTCDate() -1); 
                 if (endDateForDisplay.getTime() > startDate.getTime()) {
                     let endDateFormatted = endDateForDisplay.toLocaleDateString('en-US', dateOptions);
                     whenLine += ` to ${endDateFormatted}`;
                 }
             }
-            whenLine += ` (${timeZoneAbbreviation})`;
-        } else { // Timed event
+            whenLine += " (All Day)";
+        } else { 
             let startTimeFormatted = startDate.toLocaleTimeString('en-US', timeOptions);
             whenLine = `${startDateFormatted}, ${startTimeFormatted}`;
-
             if (info.event.end && info.event.end.getTime() > startDate.getTime()) {
                 const endDate = info.event.end;
                 let endDateFormatted = endDate.toLocaleDateString('en-US', dateOptions);
                 let endTimeFormatted = endDate.toLocaleTimeString('en-US', timeOptions);
-
-                if (startDate.toDateString() === endDate.toDateString()) { // Same day, different end time
+                if (startDate.toDateString() === endDate.toDateString()) { 
                     whenLine += ` - ${endTimeFormatted}`;
-                } else { // Different day
+                } else { 
                     whenLine += ` to ${endDateFormatted}, ${endTimeFormatted}`;
                 }
             }
             whenLine += ` ${timeZoneAbbreviation}`;
         }
     }
-    detailsHtml += `<p><strong>When:</strong> ${whenLine}</p>`;
-    // --- END REVISED "WHEN" ---
+    detailsHtml += `<div class="mt-3"><p><strong>${calendarIcon}When:</strong> ${whenLine}</p></div>`;
 
-        // --- FEATURING (MODIFIED FOR COLLAPSIBLE GROUP MEMBERS) ---
+    // --- FEATURING ---
     const participantsForEvent = (allEventParticipantsData || []).filter(p => p && String(p.EventID).trim() === String(props.EventID).trim());
     if (participantsForEvent.length > 0) {
-        detailsHtml += `<p><strong>Featuring:</strong></p><ul>`;
+        detailsHtml += `<div class="mt-3"><p class="mb-1"><strong>${peopleIcon}Featuring:</strong></p><ul class="list-group list-group-flush">`;
         participantsForEvent.forEach((participant, pIndex) => {
             if(!participant) return; 
             
             let name = participant.ParticipantNameOverride ? String(participant.ParticipantNameOverride).trim() : null;
             let role = participant.RoleInEvent ? `(${String(participant.RoleInEvent).trim()})` : ''; 
-            let associatedChurchDisplay = ''; // To store [Church Name] for minister or group
+            let associatedChurchDisplay = ''; 
             let isCollapsibleGroupWithMembers = false;
             let collapseId = '';
             let membersListHtml = '';
 
-            if (participant.MinisterID && allMinistersData) { 
+            if (participant.GroupID && allGroupsData) { 
+                const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
+                if (group) { 
+                    name = group.GroupName ? String(group.GroupName).trim() : 'Unnamed Group'; 
+                    if (group.AssociatedChurchID && allChurchesData) {
+                        const assocChurch = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(group.AssociatedChurchID).trim());
+                        if (assocChurch && assocChurch.ChurchName) {
+                            associatedChurchDisplay = ` <small class="text-muted">[${assocChurch.ChurchName.trim()}]</small>`;
+                        }
+                    }
+                    if (allGroupMembersData && allGroupMembersData.length > 0) {
+                        const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
+                        if (members.length > 0) {
+                            isCollapsibleGroupWithMembers = true;
+                            collapseId = `group-members-${props.EventID.replace(/[^a-zA-Z0-9]/g, "")}-${participant.GroupID.replace(/[^a-zA-Z0-9]/g, "")}-${pIndex}`;
+                            membersListHtml = '<ul class="list-group list-group-flush ps-3 small">'; // Using list-group for members too
+                            members.forEach(member => {
+                                membersListHtml += `<li class="list-group-item py-1 border-0">${member.MemberName || 'Unknown Member'}</li>`;
+                            });
+                            membersListHtml += '</ul>';
+                        }
+                    }
+                } else { name = name || 'Group (ID Not Found)'; }
+            } else if (participant.MinisterID && allMinistersData) { 
                 const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
                 if (minister) { 
                     name = minister.Name ? String(minister.Name).trim() : 'Minister Name Missing'; 
-                    // Get minister's home church name
                     if (minister.ChurchID && allChurchesData) {
                         const homeChurch = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(minister.ChurchID).trim());
                         if (homeChurch && homeChurch.ChurchName) {
@@ -705,76 +859,53 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                 } else { name = name || 'Minister (ID Not Found)'; }
-            } else if (participant.GroupID && allGroupsData) { 
-                const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
-                if (group) { 
-                    name = group.GroupName ? String(group.GroupName).trim() : 'Unnamed Group'; 
-                    // Get group's associated church name
-                    if (group.AssociatedChurchID && allChurchesData) {
-                        const assocChurch = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(group.AssociatedChurchID).trim());
-                        if (assocChurch && assocChurch.ChurchName) {
-                            associatedChurchDisplay = ` <small class="text-muted">[${assocChurch.ChurchName.trim()}]</small>`;
-                        }
-                    }
-                    // Group members collapsible logic
-                    if (allGroupMembersData && allGroupMembersData.length > 0) {
-                        const members = allGroupMembersData.filter(gm => gm && String(gm.GroupID).trim() === String(participant.GroupID).trim());
-                        if (members.length > 0) {
-                            isCollapsibleGroupWithMembers = true;
-                            collapseId = `group-members-${props.EventID.replace(/[^a-zA-Z0-9]/g, "")}-${participant.GroupID.replace(/[^a-zA-Z0-9]/g, "")}-${pIndex}`;
-                            
-                            membersListHtml = '<ul class="list-unstyled ms-3 mt-1 small">';
-                            members.forEach(member => {
-                                membersListHtml += `<li>${member.MemberName || 'Unknown Member'}</li>`;
-                            });
-                            membersListHtml += '</ul>';
-                        }
-                    }
-                } else { name = name || 'Group (ID Not Found)'; }
             }
             
             name = name || 'N/A'; 
 
             if (isCollapsibleGroupWithMembers) {
-                detailsHtml += `<li>
+                detailsHtml += `<li class="list-group-item">
                     <a href="#${collapseId}" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="${collapseId}" class="text-decoration-none fw-bold">
                         ${name}
                     </a>
                     ${associatedChurchDisplay} ${role} 
                     <div class="collapse" id="${collapseId}">
-                        ${membersListHtml}
+                        <div class="mt-1"> ${membersListHtml}
+                        </div>
                     </div>
                 </li>`;
             } else { 
-                detailsHtml += `<li>${name}${associatedChurchDisplay} ${role}</li>`;
+                detailsHtml += `<li class="list-group-item">${name}${associatedChurchDisplay} ${role}</li>`;
             }
         });
-        detailsHtml += `</ul>`;
+        detailsHtml += `</ul></div>`;
     }
 
     // --- LOCATION (Church Name) ---
     const church = allChurchesData.find(c => c && String(c.ChurchID).trim() === String(props.ChurchID).trim());
-    if (church) { 
+    let locationHtml = "";
+    if (church && church.ChurchName) { 
         const encodedAddress = encodeURIComponent(church.Address);
-        detailsHtml += `<p><strong>Church:</strong> ${church.ChurchName||'N/A'}</p>`;
-        detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride||`<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`||'N/A'}</p>`;
-        if (props.LocationOverride && String(props.LocationOverride).trim() !== "") {
-            detailsHtml += ` (${props.LocationOverride.trim()})`;
+        locationHtml += `${church.ChurchName}<br><a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`;
+        if (props.LocationOverride && String(props.LocationOverride).trim() !== "" && String(props.LocationOverride).trim().toLowerCase() !== church.ChurchName.trim().toLowerCase()) {
+            locationHtml += ` (${props.LocationOverride.trim()})`;
         }
-        detailsHtml += `</p>`;
     } else if (props.LocationOverride && String(props.LocationOverride).trim() !== "") {
-         detailsHtml += `<p><strong>Location:</strong> ${props.LocationOverride.trim()}</p>`;
+         locationHtml += `${props.LocationOverride.trim()}`;
+    } else {
+        locationHtml = 'N/A';
     }
+    detailsHtml += `<div class="mt-3"><p><strong>${locationIcon}Location:</strong> ${locationHtml}</p></div>`;
+
 
     // --- SCHEDULE (from patterns if IsSeriesParent) ---
-    // This 'patternsForThisEvent' uses 'props.EventID' which is correct.
-    let patternsForThisEvent = []; 
+    let patternsDisplayed = false;
     if (String(props.IsSeriesParent).toLowerCase() === 'true') {
         const originalEventID = props.EventID; 
-        patternsForThisEvent = (allServiceSchedulePatterns || []).filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
-
+        const patternsForThisEvent = (allServiceSchedulePatterns || []).filter(p => p && String(p.ParentEventID).trim() === String(originalEventID).trim());
         if (patternsForThisEvent.length > 0) {
-            detailsHtml += `<p class="mt-3"><strong>Schedule :</strong></p><ul>`;
+            patternsDisplayed = true;
+            detailsHtml += `<div class="mt-3"><p class="mb-1"><strong>${scheduleIcon}Schedule (${timeZoneAbbreviation}):</strong></p><ul class="list-group list-group-flush">`;
             const patternsByDay = {};
             patternsForThisEvent.forEach(p => { 
                 if(!p.DayOfWeek) return; 
@@ -784,34 +915,35 @@ document.addEventListener('DOMContentLoaded', function() {
             const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Weekdays"];
             dayOrder.forEach(dayKey => {
                 if (patternsByDay[dayKey] && patternsByDay[dayKey].length > 0) {
-                    detailsHtml += `<li><strong>${dayKey}:</strong><ul>`;
+                    detailsHtml += `<li class="list-group-item"><strong>${dayKey}:</strong>
+                                      <ul class="list-group list-group-flush ps-3">`;
                     patternsByDay[dayKey].sort((a,b) => (parseSimpleTimeForSort(a.ServiceStartTime) || 0) - (parseSimpleTimeForSort(b.ServiceStartTime) || 0))
                         .forEach(p => {
                             let patternTimeDisplay = p.ServiceStartTime || '';
                             if (p.ServiceEndTime) patternTimeDisplay += ` - ${p.ServiceEndTime}`;
-                                if (p.ServiceSubTitle) {
-                                    detailsHtml += `<li>${patternTimeDisplay || 'Time N/A'}: ${p.ServiceSubTitle || 'Service'}</li>`;
-                                } else {
-                                    detailsHtml += `<li>${patternTimeDisplay || 'Time N/A'} (${timeZoneAbbreviation})</li>`;
-                                }
+                            if (p.ServiceSubTitle) {
+                                detailsHtml += `<li class="list-group-item py-1 border-0">${patternTimeDisplay || 'Time N/A'}: ${p.ServiceSubTitle || 'Service'}</li>`;
+                            } else {
+                                detailsHtml += `<li class="list-group-item py-1 border-0">${patternTimeDisplay || 'Time N/A'} (${timeZoneAbbreviation})</li>`;
+                            }
                         });
                     detailsHtml += `</ul></li>`;
                 }
             });
-            detailsHtml += `</ul>`;
+            detailsHtml += `</ul></div>`;
         }
     } 
     
     // --- Overall Description ---
     let descriptionText = (props.Description || '').replace(/\n/g, '<br>');
     if (descriptionText.trim() !== "") {
-        if (String(props.IsSeriesParent).toLowerCase() === 'true' && patternsForThisEvent.length > 0) {
-             detailsHtml += `<p class="mt-3"><strong>Overall Notes:</strong><br>${descriptionText}</p>`;
+        if (String(props.IsSeriesParent).toLowerCase() === 'true' && patternsDisplayed) {
+             detailsHtml += `<div class="mt-3"><p class="mb-1"><strong>${descriptionIcon}Overall Notes:</strong></p><p>${descriptionText}</p></div>`;
         } else {
-             detailsHtml += `<p class="mt-3"><strong>Description:</strong><br>${descriptionText}</p>`;
+             detailsHtml += `<div class="mt-3"><p class="mb-1"><strong>${descriptionIcon}Description:</strong></p><p>${descriptionText}</p></div>`;
         }
-    } else if (patternsForThisEvent.length === 0) { 
-        detailsHtml += `<p class="mt-3"><strong>Description:</strong> None</p>`;
+    } else if (!patternsDisplayed) { 
+        detailsHtml += `<div class="mt-3"><p><strong>${descriptionIcon}Description:</strong> None</p></div>`;
     }
     
     document.getElementById('eventDetailBody').innerHTML = detailsHtml;
