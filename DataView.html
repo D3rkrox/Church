@@ -95,13 +95,11 @@
                         <th>Church Name</th>
                         <th>Minister</th>
                         <th>Address</th>
-                        <th>Total Families</th>
-                        <th>All Members</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="churchesTableBody">
-                    <tr><td colspan="6" class="text-center">Loading church data...</td></tr>
+                    <tr><td colspan="5" class="text-center">Loading church data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -260,8 +258,8 @@
                         addressCell.innerHTML = `<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`; // Corrected Google Maps link
                     } else { addressCell.textContent = "N/A"; }
                     
-                    row.insertCell().textContent = church.TotalFamilies !== undefined ? church.TotalFamilies : "N/A";
-                    row.insertCell().textContent = church.AllMembers !== undefined ? church.AllMembers : "N/A";
+                    //row.insertCell().textContent = church.TotalFamilies !== undefined ? church.TotalFamilies : "N/A";
+                    //row.insertCell().textContent = church.AllMembers !== undefined ? church.AllMembers : "N/A";
 
                     const actionsCell = row.insertCell();
                     const churchNameAttr = church.ChurchName ? church.ChurchName.replace(/"/g, '&quot;') : 'Selected Church'; // Sanitize for attribute
