@@ -11,36 +11,57 @@
      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
      crossorigin=""/>
     <style>
-    /* Your existing styles are preserved */
-        body { padding-top: 56px; /* Add padding to body to offset fixed navbar */ font-family: Arial, sans-serif; }
-        .container-fluid { max-width: 1140px; }
+     body { padding-top: 76px; font-family: Arial, sans-serif; }
+        .container-fluid { max-width: 1140px; margin-top: 20px; }
         .section-header { margin-top: 30px; margin-bottom: 15px; }
-        table.dataTable th { background-color: #e9ecef; cursor: pointer; }
+        table.dataTable th { background-color: #e9ecef; cursor: pointer; color: #212529; }
         .table-responsive { margin-top: 20px; }
         #statusMessage { margin-top: 15px; }
-        .modal-body ul { padding-left: 20px; list-style-type: none; }
-        .modal-body li { margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px dashed #eee; }
-        .modal-body li:last-child { border-bottom: none; }
-        .modal-body h5 { margin-top: 15px; }
         div.dataTables_length {
             display:none;
         }
-        
+        /* Modal specific styles */
+        .modal-body .section-heading { font-size: 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center;}
+        .modal-body .sub-section-heading { font-size: 1.1rem; margin-top: 1rem; margin-bottom: 0.5rem; display: flex; align-items: center;}
+        .modal-body .list-group-item { padding: .5rem 1rem; font-size: 0.9rem; } /* Adjusted padding for BS4 list-group-item */
+        .modal-body .list-group-item strong { font-weight: 600; }
+        .modal-body .list-group-flush .list-group-item { border-right-width: 0; border-left-width: 0; border-radius: 0; } /* BS4 flush style */
+        .modal-body .list-group-flush .list-group-item:first-child { border-top-width: 0;}
+        .modal-body .list-group-flush .list-group-item:last-child { border-bottom-width: 0;}
+        .modal-body .event-details-small { font-size: 0.85rem; color: #555; }
+
+
+        div.dataTables_wrapper div.dataTables_filter input,
+        div.dataTables_wrapper div.dataTables_length select {
+            margin-left: 0.5em; 
+            display: inline-block; 
+            width: auto;
+            padding: .375rem .75rem; 
+            font-size: 0.875rem; 
+            font-weight: 400;
+            line-height: 1.5;
+            color: #495057; 
+            background-color: #fff;
+            background-clip: padding-box;
+            border: 1px solid #ced4da; 
+            border-radius: .25rem;   
+            transition: border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+        }
+        div.dataTables_wrapper div.dataTables_length select {
+            padding-right: 1.75rem; 
+        }
+        div.dataTables_wrapper div.dataTables_filter input:focus,
+        div.dataTables_wrapper div.dataTables_length select:focus {
+            border-color: #80bdff; 
+            outline: 0;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, .25); 
+        }
         .view-services-btn, .show-map-btn { white-space: nowrap; }
         #mapModalLeaflet .modal-dialog { max-width: 90%; } 
         #mapCanvasLeaflet { height: 70vh; width: 100%; border: 1px solid #ccc; } 
         .map-controls { margin-bottom: 15px; text-align: center; }
-            .btn-notification-bubble {
-        font-size: 0.65rem;     /* Makes the font inside the bubble smaller */
-        padding: 0.25em 0.5em;  /* Adjust padding to control bubble size; aim for circular with 1-2 digits */
-        line-height: 1;         /* Ensures text is centered vertically */
-        /* Bootstrap's 'badge rounded-pill bg-danger' will handle shape and color */
-    }
-
-    /* Optional: Adjust padding slightly if the count is high, e.g., for "99+" */
-    .btn-notification-bubble.high-count {
-        padding: 0.25em 0.4em;
-    }
+        .icon-me { margin-right: 8px; vertical-align: text-bottom; /* Adjusted for better alignment with h4/h5 */ width: 1em; height: 1em; /* Ensure consistent icon size */}
+        table.dataTable td { text-align: left; }
     </style>
 </head>
 <body>
@@ -74,11 +95,13 @@
                         <th>Church Name</th>
                         <th>Minister</th>
                         <th>Address</th>
+                        <th>Total Families</th>
+                        <th>All Members</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody id="churchesTableBody">
-                    <tr><td colspan="5" class="text-center">Loading church data...</td></tr>
+                    <tr><td colspan="6" class="text-center">Loading church data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -126,7 +149,10 @@
 
     <script>
         const SCRIPT_API_URL = 'https://script.google.com/macros/s/AKfycbz0svFL0DvyXVMc3ebkKaEyFwVSl3zWe1ff0qO5NQ1J66AlO8YSwYERGqxsZbDhR1K75g/exec';
-
+        const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-calendar3 icon-me" viewBox="0 0 16 16"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857z"/><path d="M6.5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`;
+        const clockIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clock-fill icon-me" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/></svg>`;
+        const eventIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-calendar-event-fill icon-me" viewBox="0 0 16 16"><path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4V.5zM16 14V5H0v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2zm-3.5-7h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5z"/></svg>`;
+        
         let allChurchesData = [];
         let allMinistersData = [];
         let allServicesData = [];
@@ -234,6 +260,9 @@
                         addressCell.innerHTML = `<a href="https://maps.google.com/?q=${encodedAddress}" target="_blank">${church.Address}</a>`; // Corrected Google Maps link
                     } else { addressCell.textContent = "N/A"; }
                     
+                    row.insertCell().textContent = church.TotalFamilies !== undefined ? church.TotalFamilies : "N/A";
+                    row.insertCell().textContent = church.AllMembers !== undefined ? church.AllMembers : "N/A";
+
                     const actionsCell = row.insertCell();
                     const churchNameAttr = church.ChurchName ? church.ChurchName.replace(/"/g, '&quot;') : 'Selected Church'; // Sanitize for attribute
                     const upcomingEventCount = getUpcomingSpecialEventCountForChurch(church.ChurchID);
@@ -270,7 +299,7 @@
                 initializeDataTable('churchesInfoTable'); 
                 attachServiceButtonListeners();
             } else {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center">No churches found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No churches found.</td></tr>';
             }
         }
         function attachServiceButtonListeners() {
@@ -282,164 +311,151 @@
             });
         }
         
-        function displayServicesInModal(churchId, churchName) {
-        const modalTitle = document.getElementById("servicesModalLabel");
-        const modalBody = document.getElementById("servicesModalBody");
+function displayServicesInModal(churchId, churchName) {
+            const modalTitle = document.getElementById("servicesModalLabel");
+            const modalBody = document.getElementById("servicesModalBody");
 
-        if (!modalTitle || !modalBody) {
-            console.error("Services modal elements not found!");
-            return;
-        }
-
-        modalTitle.textContent = `Services & Special Events for ${churchName}`;
-        let html = "";
-
-        // --- Part 1: Regular Service Schedule (Restored to previous working logic) ---
-        const servicesForChurch = allServicesData.filter(
-            s => s && String(s.ChurchID).trim() === String(churchId).trim()
-        );
-
-        html += "<h4>Regular Service Schedule</h4>";
-        if (servicesForChurch.length === 0) {
-            html += "<p>No regular services listed for this church.</p>";
-        } else {
-            const weeklyServices = servicesForChurch.filter(s => s.RecurrenceType === 'Weekly');
-            const monthlyNthServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyNthWeekday');
-            const monthlyRelativeServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyRelativeToRule');
-
-            // Display Weekly Services
-            if (weeklyServices.length > 0) {
-                html += "<h5>Weekly Services</h5><ul>";
-                const weeklyByDay = {};
-                const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                weeklyServices.forEach(s => {
-                    if (!s.DayOfWeek) return; // Skip if DayOfWeek is missing
-                    if (!weeklyByDay[s.DayOfWeek]) weeklyByDay[s.DayOfWeek] = [];
-                    weeklyByDay[s.DayOfWeek].push(s);
-                });
-                dayOrder.forEach(day => {
-                    if (weeklyByDay[day] && weeklyByDay[day].length > 0) {
-                        html += `<li class="mb-2"><strong>${day}:</strong><ul>`;
-                        weeklyByDay[day]
-                            .sort((a,b) => (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0))
-                            .forEach(s => {
-                                let title = s.ServiceTitle || "Service";
-                                if ((s.IsCommunionFlag === true || String(s.IsCommunionFlag).toLowerCase() === 'true') && !title.toLowerCase().includes("communion")) {
-                                    title += " (Communion)";
-                                }
-                                let duration = s.DurationMinutes ? ` (${s.DurationMinutes} mins)` : '';
-                                html += `<li>${title} at ${s.Time || 'N/A'}</li>`; 
-                            });
-                        html += `</ul></li>`;
-                    }
-                });
-                html += "</ul>";
-            } else {
-                 html += "<h5>Weekly Services</h5><p>No regular weekly services listed.</p>";
+            if (!modalTitle || !modalBody) {
+                console.error("Services modal elements not found!");
+                return;
             }
-            html += "<hr>";
 
-            // Display Monthly Nth Weekday Services
-            if (monthlyNthServices.length > 0) {
-                const monthlyNthByTitle = {};
-                monthlyNthServices.forEach(s => {
-                    const titleKey = s.ServiceTitle || "Untitled Monthly Service";
-                    if (!monthlyNthByTitle[titleKey]) monthlyNthByTitle[titleKey] = [];
-                    monthlyNthByTitle[titleKey].push(s);
-                });
-                for (const serviceTitleKey in monthlyNthByTitle) {
-                    html += `<h5>${serviceTitleKey}</h5><ul>`;
-                    monthlyNthByTitle[serviceTitleKey].sort((a,b) => { 
-                        const nthOrder = ["1st", "2nd", "3rd", "4th", "Last"];
-                        const dayOrderVal = {"Sunday":0, "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6};
-                        let comparison = (nthOrder.indexOf(a.NthOccurrence) || 5) - (nthOrder.indexOf(b.NthOccurrence) || 5) ;
-                        if (comparison === 0) comparison = (dayOrderVal[a.DayOfWeek] !== undefined ? dayOrderVal[a.DayOfWeek] : 7) - (dayOrderVal[b.DayOfWeek] !== undefined ? dayOrderVal[b.DayOfWeek] : 7);
-                        if (comparison === 0) comparison = (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0);
-                        return comparison;
-                    }).forEach(s => {
-                        html += `<li>${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
+            modalTitle.textContent = `Schedule & Events: ${churchName}`;
+            let html = "";
+
+            // --- Part 1: Regular Service Schedule ---
+            const servicesForChurch = allServicesData.filter(
+                s => s && String(s.ChurchID).trim() === String(churchId).trim()
+            );
+
+            html += `<h4 class="section-heading mt-2">${clockIcon}Service Schedule</h4>`;
+            if (servicesForChurch.length === 0) {
+                html += "<p>No regular services listed for this church.</p>";
+            } else {
+                const weeklyServices = servicesForChurch.filter(s => s.RecurrenceType === 'Weekly');
+                const monthlyNthServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyNthWeekday');
+                const monthlyRelativeServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyRelativeToRule');
+
+                if (weeklyServices.length > 0) {
+                    html += `<p class="mb-0"><strong>Weekly Services</strong></p><ul class='list-group list-group-flush'>`;
+                    const weeklyByDay = {};
+                    const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+                    weeklyServices.forEach(s => {
+                        if (!s.DayOfWeek) return; 
+                        if (!weeklyByDay[s.DayOfWeek]) weeklyByDay[s.DayOfWeek] = [];
+                        weeklyByDay[s.DayOfWeek].push(s);
                     });
-                    html += `</ul>`;
+                    dayOrder.forEach(day => {
+                        if (weeklyByDay[day] && weeklyByDay[day].length > 0) {
+                            html += `<li class="list-group-item"><strong>${day}:</strong><ul class="list-unstyled ps-3 mt-1">`; // Bootstrap 4 uses ps-3 for padding-left
+                            weeklyByDay[day]
+                                .sort((a,b) => (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0))
+                                .forEach(s => {
+                                    let title = s.ServiceTitle || "Service";
+                                    if ((s.IsCommunionFlag === true || String(s.IsCommunionFlag).toLowerCase() === 'true') && !title.toLowerCase().includes("communion")) {
+                                        title += " (Communion)";
+                                    }
+                                    html += `<li>${title} at ${s.Time || 'N/A'}</li>`; 
+                                });
+                            html += `</ul></li>`;
+                        }
+                    });
+                    html += "</ul>";
+                } else {
+                     html += "<h5 class='sub-section-heading'>Weekly Services</h5><p>No regular weekly services listed.</p>";
                 }
-                 html += "<hr>";
-            } else { html += "<h5>Monthly Services</h5><p>No Nth weekday services listed.</p><hr>"; }
-
-            // Display Monthly Relative Services
-            if (monthlyRelativeServices.length > 0) {
-                const monthlyRelativeByTitle = {};
-                 monthlyRelativeServices.forEach(s => {
-                    const titleKey = s.ServiceTitle || "Untitled Relative Service";
-                    if (!monthlyRelativeByTitle[titleKey]) monthlyRelativeByTitle[titleKey] = [];
-                    monthlyRelativeByTitle[titleKey].push(s);
-                });
-                for (const serviceTitleKey in monthlyRelativeByTitle) {
-                    html += `<h5>${serviceTitleKey}</h5><ul>`;
-                    monthlyRelativeByTitle[serviceTitleKey].sort((a,b) => (formatServiceRuleDescription(a, churchId, serviceTitleKey)).localeCompare(formatServiceRuleDescription(b, churchId, serviceTitleKey)))
-                        .forEach(s => {
-                            html += `<li>${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
+                
+                if (monthlyNthServices.length > 0) {
+                    const monthlyNthByTitle = {};
+                    monthlyNthServices.forEach(s => {
+                        const titleKey = s.ServiceTitle || "Untitled Monthly Service";
+                        if (!monthlyNthByTitle[titleKey]) monthlyNthByTitle[titleKey] = [];
+                        monthlyNthByTitle[titleKey].push(s);
+                    });
+                    for (const serviceTitleKey in monthlyNthByTitle) {
+                        html += `<p class="mb-0"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
+                        monthlyNthByTitle[serviceTitleKey].sort((a,b) => { 
+                          const nthOrder = ["1st", "2nd", "3rd", "4th", "Last"];
+                          const dayOrderVal = {"Sunday":0, "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6};
+                          let comparison = (nthOrder.indexOf(a.NthOccurrence) || 5) - (nthOrder.indexOf(b.NthOccurrence) || 5) ;
+                          if (comparison === 0) comparison = (dayOrderVal[a.DayOfWeek] !== undefined ? dayOrderVal[a.DayOfWeek] : 7) - (dayOrderVal[b.DayOfWeek] !== undefined ? dayOrderVal[b.DayOfWeek] : 7);
+                          if (comparison === 0) comparison = (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0);
+                          return comparison; 
+                         }).forEach(s => {
+                            html += `<li class="list-group-item">${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
                         });
-                    html += `</ul>`;
-                }
-            } else { html += "<h5>Other Monthly Services</h5><p>No relative monthly services listed.</p>"; }
-        }
-        html += "<hr class='my-3'>"; // Separator before special events
+                        html += `</ul>`;
+                    }
+                } else { html += "<h5 class='sub-section-heading mt-3'>Monthly Services</h5><p>No weekday services listed.</p>"; }
 
-        // --- Part 2: Upcoming & Ongoing Special Events (Revivals, Singings, Fundraisers) ---
-        html += "<h4>Upcoming & Ongoing Special Events</h4>";
-        
-        const specialEventTypesToShow = ["revival", "singing", "fundraiser"]; 
-        
-        const specialEventsForThisChurch = allSpecialEventsData.filter(event => 
-            event && 
-            String(event.ChurchID).trim() === String(churchId).trim() &&
-            specialEventTypesToShow.includes(String(event.EventType || "").trim().toLowerCase()) &&
-            (String(event.isGeneratedInstance).toLowerCase() !== 'true') // Only show parents or single non-series events
-        );
-
-        const today = new Date(); 
-        today.setHours(0, 0, 0, 0); // Today at midnight in local timezone
-        const relevantSpecialEvents = [];
-
-        specialEventsForThisChurch.forEach(event => {
-            if (!event.StartDate) return;
-
-            const eventStart = new Date(event.StartDate); // Converts UTC ISO string to local Date object
-            const eventEnd = event.EndDate ? new Date(event.EndDate) : new Date(eventStart); 
-            const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
-
-            // Get the date part only, in local timezone for comparison
-            const eventStartDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
-            
-            let eventLastDayInclusive;
-            if (isAllDay) {
-                // For all-day events, the EndDate from cache is exclusive UTC.
-                // To get the last inclusive day in local time:
-                let exclusiveEndLocal = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
-                eventLastDayInclusive = new Date(exclusiveEndLocal.setDate(exclusiveEndLocal.getDate() - 1));
-            } else {
-                // For timed events, the EndDate is the actual end moment. We just need its date part.
-                eventLastDayInclusive = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                if (monthlyRelativeServices.length > 0) {
+                    const monthlyRelativeByTitle = {};
+                     monthlyRelativeServices.forEach(s => {
+                        const titleKey = s.ServiceTitle || "Untitled Relative Service";
+                        if (!monthlyRelativeByTitle[titleKey]) monthlyRelativeByTitle[titleKey] = [];
+                        monthlyRelativeByTitle[titleKey].push(s);
+                    });
+                    for (const serviceTitleKey in monthlyRelativeByTitle) {
+                        html += `<p class="mb-0"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
+                        monthlyRelativeByTitle[serviceTitleKey].sort((a,b) => (formatServiceRuleDescription(a, churchId, serviceTitleKey)).localeCompare(formatServiceRuleDescription(b, churchId, serviceTitleKey)))
+                            .forEach(s => {
+                                html += `<li class="list-group-item">${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
+                            });
+                        html += `</ul>`;
+                    }
+                } else { html += "<h5 class='sub-section-heading mt-3'>Other Monthly Services</h5><p>No relative monthly services listed.</p>"; }
             }
-             // Ensure last day is not before start day if duration is short or end date is missing/same
-            if (eventLastDayInclusive < eventStartDateOnly) eventLastDayInclusive = new Date(eventStartDateOnly);
+            html += "<hr class='my-4'>"; 
+
+            // --- Part 2: Upcoming & Ongoing Special Events ---
+            html += `<h4 class="section-heading">${eventIcon}Upcoming & Ongoing Special Events</h4>`;
+            const specialEventTypesToShow = ["revival", "singing", "fundraiser"]; 
+            const specialEventsForThisChurch = allSpecialEventsData.filter(event => 
+                event && String(event.ChurchID).trim() === String(churchId).trim() &&
+                specialEventTypesToShow.includes(String(event.EventType || "").trim().toLowerCase()) &&
+                (String(event.isGeneratedInstance).toLowerCase() !== 'true') 
+            );
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const relevantSpecialEvents = [];
+            specialEventsForThisChurch.forEach(event => { 
+                if (!event.StartDate) return;
+
+              const eventStart = new Date(event.StartDate); // Converts UTC ISO string to local Date object
+              const eventEnd = event.EndDate ? new Date(event.EndDate) : new Date(eventStart); 
+              const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
+
+              // Get the date part only, in local timezone for comparison
+              const eventStartDateOnly = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+              
+              let eventLastDayInclusive;
+              if (isAllDay) {
+                  // For all-day events, the EndDate from cache is exclusive UTC.
+                  // To get the last inclusive day in local time:
+                  let exclusiveEndLocal = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+                  eventLastDayInclusive = new Date(exclusiveEndLocal.setDate(exclusiveEndLocal.getDate() - 1));
+              } else {
+                  // For timed events, the EndDate is the actual end moment. We just need its date part.
+                  eventLastDayInclusive = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+              }
+              // Ensure last day is not before start day if duration is short or end date is missing/same
+              if (eventLastDayInclusive < eventStartDateOnly) eventLastDayInclusive = new Date(eventStartDateOnly);
 
 
-            const isOngoing = (today >= eventStartDateOnly && today <= eventLastDayInclusive);
-            const isFuture = (eventStartDateOnly > today);
+              const isOngoing = (today >= eventStartDateOnly && today <= eventLastDayInclusive);
+              const isFuture = (eventStartDateOnly > today);
 
-            if (isOngoing || isFuture) {
-                relevantSpecialEvents.push(event);
-            }
-        });
+              if (isOngoing || isFuture) {
+                  relevantSpecialEvents.push(event);
+              }
+             });
 
-        if (relevantSpecialEvents.length > 0) {
-            html += "<ul class='list-unstyled mt-3'>";
-            relevantSpecialEvents.sort((a,b) => new Date(a.StartDate) - new Date(b.StartDate)); 
-            
-            relevantSpecialEvents.forEach(event => {
-                let title = event.EventType || "Special Event";
+            if (relevantSpecialEvents.length > 0) {
+                html += "<ul class='list-group list-group-flush mt-2'>";
+                relevantSpecialEvents.sort((a,b) => new Date(a.StartDate) - new Date(b.StartDate)); 
+                relevantSpecialEvents.forEach(event => {
+                    let title = event.EventType || "Special Event";
 
-                const startDate = new Date(event.StartDate);
+                    const startDate = new Date(event.StartDate);
                 const endDate = event.EndDate ? new Date(event.EndDate) : startDate; // Use start if end is missing
                 const isAllDay = String(event.IsAllDay).toLowerCase() === 'true';
                 
@@ -447,7 +463,6 @@
                 const timeOptions = { hour: 'numeric', minute:'2-digit' };
                 
                 let dateString = startDate.toLocaleDateString(undefined, dateOptions);
-                
                 if (isAllDay) {
                     let actualEndDate = new Date(endDate.getTime());
                     actualEndDate.setDate(actualEndDate.getUTCDate() -1); // Make inclusive for display
@@ -465,22 +480,27 @@
                         }
                     }
                 }
-                
-                html += `<li class="mb-3"><strong class="d-block">${title}</strong><small class="text-muted">When: ${dateString}</small>`;
-                if (event.Description) { 
-                    html += `<br><small class="d-block mt-1"><em>Details:</em><br>${event.Description.replace(/\n/g, '<br>')}</small>`;
-                }
-                html += `</li>`;
-            });
-            html += "</ul>";
-        } else {
-            html += "<p>No upcoming Revivals, Singings, or Fundraisers listed for this church.</p>";
+
+                    html += `<li class="list-group-item">
+                                <strong class="d-block">${title}</strong>
+                                <span class="event-details-small">When: ${dateString}</span>`;
+                    if (event.Description) { 
+                        html += `<br><span class="event-details-small"><em>Details:</em> ${event.Description.replace(/\n/g, '<br>')}</span>`;
+                    }
+                    html += `</li>`;
+                });
+                html += "</ul>";
+            } else {
+                html += "<p>No upcoming Revivals, Singings, or Fundraisers listed for this church.</p>";
+            }
+
+            modalBody.innerHTML = html;
+            $('#servicesModal').modal('show'); // Bootstrap 4 modal show
         }
 
-        modalBody.innerHTML = html;
-        $('#servicesModal').modal('show');
-    }
-    function getUpcomingSpecialEventCountForChurch(churchId) {
+
+
+        function getUpcomingSpecialEventCountForChurch(churchId) {
         if (!allSpecialEventsData || !allChurchesData) return 0; // Ensure necessary data is loaded
 
         const specialEventTypesToCount = ["revival", "singing", "fundraiser"]; 
