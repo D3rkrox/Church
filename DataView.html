@@ -150,11 +150,13 @@
         const calendarIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-calendar3 icon-me" viewBox="0 0 16 16"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2zM1 3.857C1 3.384 1.448 3 2 3h12c.552 0 1 .384 1 .857v10.286c0 .473-.448.857-1 .857H2c-.552 0-1-.384-1-.857V3.857z"/><path d="M6.5 7a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-9 3a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`;
         const clockIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clock-fill icon-me" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/></svg>`;
         const eventIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-calendar-event-fill icon-me" viewBox="0 0 16 16"><path d="M4 .5a.5.5 0 0 0-1 0V1H2a2 2 0 0 0-2 2v1h16V3a2 2 0 0 0-2-2h-1V.5a.5.5 0 0 0-1 0V1H4V.5zM16 14V5H0v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2zm-3.5-7h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5z"/></svg>`;
-        
+        const peopleIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-people-fill icon-me" viewBox="0 0 16 16"><path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/><path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg>`;
+
         let allChurchesData = [];
         let allMinistersData = [];
         let allServicesData = [];
         let allSpecialEventsData = [];
+        let allEventParticipantsData = []; // This holds data from "EventParticipants" sheet
         let churchesDataTable; 
         let leafletMap; 
         let leafletMarkers = []; // Keep track of markers to manage them
@@ -308,7 +310,7 @@
                 else console.error("View Services button clicked without a churchId.");
             });
         }
-        
+
 function displayServicesInModal(churchId, churchName) {
             const modalTitle = document.getElementById("servicesModalLabel");
             const modalBody = document.getElementById("servicesModalBody");
@@ -321,88 +323,132 @@ function displayServicesInModal(churchId, churchName) {
             modalTitle.textContent = `Schedule & Events: ${churchName}`;
             let html = "";
 
-            // --- Part 1: Regular Service Schedule ---
             const servicesForChurch = allServicesData.filter(
                 s => s && String(s.ChurchID).trim() === String(churchId).trim()
             );
 
-            html += `<h4 class="section-heading mt-2">${clockIcon}Service Schedule</h4>`;
+            html += `<h4 class="section-heading mt-2">${clockIcon}Regular Service Schedule</h4>`;
             if (servicesForChurch.length === 0) {
                 html += "<p>No regular services listed for this church.</p>";
             } else {
-                const weeklyServices = servicesForChurch.filter(s => s.RecurrenceType === 'Weekly');
-                const monthlyNthServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyNthWeekday');
-                const monthlyRelativeServices = servicesForChurch.filter(s => s.RecurrenceType === 'MonthlyRelativeToRule');
-
-                if (weeklyServices.length > 0) {
-                    html += `<p class="mb-0"><strong>Weekly Services</strong></p><ul class='list-group list-group-flush'>`;
-                    const weeklyByDay = {};
-                    const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-                    weeklyServices.forEach(s => {
-                        if (!s.DayOfWeek) return; 
-                        if (!weeklyByDay[s.DayOfWeek]) weeklyByDay[s.DayOfWeek] = [];
-                        weeklyByDay[s.DayOfWeek].push(s);
-                    });
-                    dayOrder.forEach(day => {
-                        if (weeklyByDay[day] && weeklyByDay[day].length > 0) {
-                            html += `<li class="list-group-item"><strong>${day}:</strong><ul class="list-unstyled ps-3 mt-1">`; // Bootstrap 4 uses ps-3 for padding-left
-                            weeklyByDay[day]
-                                .sort((a,b) => (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0))
-                                .forEach(s => {
-                                    let title = s.ServiceTitle || "Service";
-                                    if ((s.IsCommunionFlag === true || String(s.IsCommunionFlag).toLowerCase() === 'true') && !title.toLowerCase().includes("communion")) {
-                                        title += " (Communion)";
-                                    }
-                                    html += `<li>${title} at ${s.Time || 'N/A'}</li>`; 
-                                });
-                            html += `</ul></li>`;
-                        }
-                    });
-                    html += "</ul>";
-                } else {
-                     html += "<h5 class='sub-section-heading'>Weekly Services</h5><p>No regular weekly services listed.</p>";
-                }
+                const servicesByDayGrid = {};
+                const dayOrder = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
                 
-                if (monthlyNthServices.length > 0) {
-                    const monthlyNthByTitle = {};
-                    monthlyNthServices.forEach(s => {
+                servicesForChurch.forEach(s => {
+                    const serviceTitleLower = String(s.ServiceTitle || "").toLowerCase();
+                    if (!s.DayOfWeek || !(serviceTitleLower.includes("morning") || serviceTitleLower.includes("evening"))) {
+                        return; 
+                    }
+
+                    if (!servicesByDayGrid[s.DayOfWeek]) servicesByDayGrid[s.DayOfWeek] = [];
+                    
+                    let displayTitle = s.ServiceTitle || "Service";
+                    if ((s.IsCommunionFlag === true || String(s.IsCommunionFlag).toLowerCase() === 'true') && !displayTitle.toLowerCase().includes("communion")) {
+                        displayTitle += " (Communion)";
+                    }
+
+                    let recurrenceNote = "";
+                    if (s.RecurrenceType === 'MonthlyNthWeekday' && s.NthOccurrence) {
+                        const specificMonth = s.SpecificMonth ? String(s.SpecificMonth).trim() : null;
+                        if (specificMonth) {
+                            recurrenceNote = `<span class="service-recurrence-note">(${s.NthOccurrence} of ${specificMonth})</span>`;
+                        } else {
+                            recurrenceNote = `<span class="service-recurrence-note">(${s.NthOccurrence} of the month)</span>`;
+                        }
+                    } else if (s.RecurrenceType === 'MonthlyRelativeToRule') {
+                        // --- NEW LOGIC FOR RELATIVE RULE NOTE IN GRID ---
+                        if (s.RelativeToServiceID && allServicesData) {
+                            const baseService = allServicesData.find(base => 
+                                base.ServiceID === s.RelativeToServiceID && 
+                                base.ChurchID === churchId &&
+                                base.RecurrenceType === 'MonthlyNthWeekday' // Ensure base is NthWeekday type
+                            );
+                            if (baseService && baseService.NthOccurrence && baseService.DayOfWeek) {
+                                //recurrenceNote = `<span class="service-recurrence-note">(${baseService.NthOccurrence} ${baseService.DayOfWeek})</span>`;
+                                recurrenceNote = `<span class="service-recurrence-note">(${baseService.NthOccurrence} ${s.DayOfWeek})</span>`;
+                            } else {
+                                recurrenceNote = `<span class="service-recurrence-note">(Monthly Special)</span>`; // Fallback if base rule details not found
+                            }
+                        } else {
+                             recurrenceNote = `<span class="service-recurrence-note">(Monthly Special)</span>`;
+                        }
+                        // --- END NEW LOGIC ---
+                    }
+                    
+                    servicesByDayGrid[s.DayOfWeek].push({
+                        title: displayTitle,
+                        time: s.Time || 'N/A',
+                        recurrenceNote: recurrenceNote
+                    });
+                });
+
+                html += "<h5 class='sub-section-heading'>Services by Day of Week</h5>";
+                html += "<div class='row'>"; // Start Bootstrap row for columns
+                let dayHasServices = false;
+                dayOrder.forEach(day => {
+                    if (servicesByDayGrid[day] && servicesByDayGrid[day].length > 0) {
+                        dayHasServices = true;
+                        html += `<div class="col-lg-4 col-md-6 mb-3">`; // col-lg-4 for 3 cols on large, col-md-6 for 2 cols on medium
+                        html += `<strong>${day}:</strong><ul class="list-unstyled mt-1">`;
+                        servicesByDayGrid[day]
+                            .sort((a,b) => (parseSimpleTimeForSort(a.time) || 0) - (parseSimpleTimeForSort(b.time) || 0))
+                            .forEach(s_item => {
+                                html += `<li>${s_item.title} ${s_item.recurrenceNote} at ${s_item.time}</li>`; 
+                            });
+                        html += `</ul></div>`; 
+                    }
+                });
+                if (!dayHasServices) {
+                    html += "<div class='col-12'><p>No daily services listed in this format.</p></div>";
+                }
+                html += "</div>"; // End Bootstrap row
+                html += "<hr>";
+
+                // --- Dedicated Sections for OTHER Monthly Rules (those NOT "Morning" or "Evening") ---
+                const otherMonthlyNthServices = servicesForChurch.filter(s => 
+                    s.RecurrenceType === 'MonthlyNthWeekday' && 
+                    !(String(s.ServiceTitle || "").toLowerCase().includes("morning") || String(s.ServiceTitle || "").toLowerCase().includes("evening"))
+                );
+                const otherMonthlyRelativeServices = servicesForChurch.filter(s => 
+                    s.RecurrenceType === 'MonthlyRelativeToRule' &&
+                    !(String(s.ServiceTitle || "").toLowerCase().includes("morning") || String(s.ServiceTitle || "").toLowerCase().includes("evening"))
+                );
+
+                if (otherMonthlyNthServices.length > 0) {
+                    //html += "<h5 class='sub-section-heading mt-3'>Other Detailed Monthly Rules (Nth Weekday)</h5>";
+                    const monthlyNthByTitle = {}; 
+                    otherMonthlyNthServices.forEach(s => { 
                         const titleKey = s.ServiceTitle || "Untitled Monthly Service";
                         if (!monthlyNthByTitle[titleKey]) monthlyNthByTitle[titleKey] = [];
                         monthlyNthByTitle[titleKey].push(s);
                     });
-                    for (const serviceTitleKey in monthlyNthByTitle) {
-                        html += `<p class="mb-0"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
-                        monthlyNthByTitle[serviceTitleKey].sort((a,b) => { 
-                          const nthOrder = ["1st", "2nd", "3rd", "4th", "Last"];
-                          const dayOrderVal = {"Sunday":0, "Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6};
-                          let comparison = (nthOrder.indexOf(a.NthOccurrence) || 5) - (nthOrder.indexOf(b.NthOccurrence) || 5) ;
-                          if (comparison === 0) comparison = (dayOrderVal[a.DayOfWeek] !== undefined ? dayOrderVal[a.DayOfWeek] : 7) - (dayOrderVal[b.DayOfWeek] !== undefined ? dayOrderVal[b.DayOfWeek] : 7);
-                          if (comparison === 0) comparison = (parseSimpleTimeForSort(a.Time) || 0) - (parseSimpleTimeForSort(b.Time) || 0);
-                          return comparison; 
-                         }).forEach(s => {
+                    for (const serviceTitleKey in monthlyNthByTitle) { 
+                        html += `<p class="mb-1"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
+                        monthlyNthByTitle[serviceTitleKey].sort((a,b) => { /* ... sort logic ... */ }).forEach(s => {
                             html += `<li class="list-group-item">${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
                         });
                         html += `</ul>`;
                     }
-                } else { html += "<h5 class='sub-section-heading mt-3'>Monthly Services</h5><p>No weekday services listed.</p>"; }
-
-                if (monthlyRelativeServices.length > 0) {
+                }
+                
+                if (otherMonthlyRelativeServices.length > 0) {
+                    //html += "<h5 class='sub-section-heading mt-3'>Other Detailed Monthly Rules (Relative)</h5>";
                     const monthlyRelativeByTitle = {};
-                     monthlyRelativeServices.forEach(s => {
+                     otherMonthlyRelativeServices.forEach(s => {
                         const titleKey = s.ServiceTitle || "Untitled Relative Service";
                         if (!monthlyRelativeByTitle[titleKey]) monthlyRelativeByTitle[titleKey] = [];
                         monthlyRelativeByTitle[titleKey].push(s);
                     });
                     for (const serviceTitleKey in monthlyRelativeByTitle) {
-                        html += `<p class="mb-0"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
+                        html += `<p class="mb-1"><strong>${serviceTitleKey}</strong></p><ul class="list-group list-group-flush mb-2">`;
                         monthlyRelativeByTitle[serviceTitleKey].sort((a,b) => (formatServiceRuleDescription(a, churchId, serviceTitleKey)).localeCompare(formatServiceRuleDescription(b, churchId, serviceTitleKey)))
                             .forEach(s => {
                                 html += `<li class="list-group-item">${formatServiceRuleDescription(s, churchId, serviceTitleKey)}</li>`;
                             });
                         html += `</ul>`;
                     }
-                } else { html += "<h5 class='sub-section-heading mt-3'>Other Monthly Services</h5><p>No relative monthly services listed.</p>"; }
-            }
+                }
+            } 
             html += "<hr class='my-4'>"; 
 
             // --- Part 2: Upcoming & Ongoing Special Events ---
@@ -482,6 +528,23 @@ function displayServicesInModal(churchId, churchName) {
                     html += `<li class="list-group-item">
                                 <strong class="d-block">${title}</strong>
                                 <span class="event-details-small">When: ${dateString}</span>`;
+                    const eventTypeLower = String(event.EventType || "").trim().toLowerCase();
+                    if (eventTypeLower === "revival" || eventTypeLower === "revival meeting") {
+                        const revivalMinisters = [];
+                        if (allEventParticipantsData && event.EventID) {
+                            allEventParticipantsData.forEach(participant => {
+                                if (participant.EventID === event.EventID && participant.MinisterID && allMinistersData) {
+                                    const minister = allMinistersData.find(m => m.MinisterID === participant.MinisterID);
+                                    if (minister && minister.Name) {
+                                        revivalMinisters.push(minister.Name.trim());
+                                    }
+                                }
+                            });
+                        }
+                        if (revivalMinisters.length > 0) {
+                            html += `<br><span class="event-details-small"><em>${peopleIcon}Featuring:</em> ${revivalMinisters.join(' and ')}</span>`;
+                        }
+                    }
                     if (event.Description) { 
                         html += `<br><span class="event-details-small"><em>Details:</em> ${event.Description.replace(/\n/g, '<br>')}</span>`;
                     }
@@ -495,7 +558,6 @@ function displayServicesInModal(churchId, churchName) {
             modalBody.innerHTML = html;
             $('#servicesModal').modal('show'); // Bootstrap 4 modal show
         }
-
 
 
         function getUpcomingSpecialEventCountForChurch(churchId) {
@@ -570,71 +632,73 @@ function displayServicesInModal(churchId, churchName) {
 
 
 function formatServiceRuleDescription(service, churchId, serviceHeaderTitle = "") {
-        let description = "";
-        // Use the service's own title for communion check if header title isn't passed reliably for this specific check
-        let lowerServiceOwnTitle = (service.ServiceTitle || "").toLowerCase(); 
+            let description = "";
+            let lowerServiceOwnTitle = (service.ServiceTitle || "").toLowerCase(); 
+            let timeText = service.Time ? ` at ${service.Time}` : '';
+            let durationText = service.DurationMinutes ? ` (${service.DurationMinutes} mins)` : '';
+            let communionSuffix = ""; 
 
-        let timeText = service.Time ? ` at ${service.Time}` : '';
-        let durationText = service.DurationMinutes ? ` (${service.DurationMinutes} mins)` : '';
-        
-        let communionSuffix = ""; 
-        // Add communion suffix if IsCommunionFlag is true AND the ServiceTitle itself doesn't already say "Communion"
-        if ((service.IsCommunionFlag === true || String(service.IsCommunionFlag).toLowerCase() === 'true') && 
-            !lowerServiceOwnTitle.includes("communion")) {
-            communionSuffix = " (Communion)";
-        }
-
-        if (service.RecurrenceType === 'MonthlyNthWeekday') {
-            description = `The ${service.NthOccurrence || ''} ${service.DayOfWeek || ''} of the month`;
-            return `${description}${communionSuffix}`; // Time/duration previously removed for this type
-
-        } else if (service.RecurrenceType === 'MonthlyRelativeToRule') {
-            // Check if THIS service's title is "Communion" or "Communion Service" for special formatting
-            if (lowerServiceOwnTitle === 'communion' || lowerServiceOwnTitle === 'communion service') {
-                let parsedTime = parseTime(service.Time);
-                if (parsedTime && parsedTime.hours >= 16) { // 4 PM (16:00) or later is "Evening"
-                    return `${service.DayOfWeek || 'Day not specified'} Evening`;
-                } else if (service.Time) { // It's communion, has a time, but not evening
-                    return `${service.DayOfWeek || 'Day not specified'} at ${service.Time}`;
-                } else { // It's communion, but no time specified in its row
-                     return `${service.DayOfWeek || 'Day not specified'}`;
-                }
+            if ((service.IsCommunionFlag === true || String(service.IsCommunionFlag).toLowerCase() === 'true') && 
+                !lowerServiceOwnTitle.includes("communion")) {
+                communionSuffix = " (Communion)";
             }
-            
-            // Logic for OTHER "MonthlyRelativeToRule" services (not titled "Communion/Communion Service")
-            let baseRuleDesc = service.RelativeToServiceID || 'specified rule';
-            if (typeof allServicesData !== 'undefined' && allServicesData.length > 0) {
-                const baseService = allServicesData.find(s_lookup => 
-                    s_lookup.ServiceID === service.RelativeToServiceID && 
-                    s_lookup.ChurchID === churchId 
-                );
-                if (baseService && baseService.ServiceTitle) {
-                    baseRuleDesc = `"${baseService.ServiceTitle}" (${service.RelativeToServiceID})`; // Include ID for clarity
+
+            if (service.RecurrenceType === 'MonthlyNthWeekday') {
+                // *** NEW: Check for SpecificMonth ***
+                const specificMonth = service.SpecificMonth ? String(service.SpecificMonth).trim() : null;
+                if (specificMonth) {
+                    description = `The ${service.NthOccurrence || ''} ${service.DayOfWeek || ''} of ${specificMonth}`;
+                } else {
+                    description = `The ${service.NthOccurrence || ''} ${service.DayOfWeek || ''} of the month`;
                 }
+                // Time/duration were previously removed for this type in the list item,
+                // but if the header (ServiceTitle) is generic, we might want time here.
+                // For now, keeping it as per your last request for this specific rule type.
+                return `${description}${communionSuffix}`; 
+
+            } else if (service.RecurrenceType === 'MonthlyRelativeToRule') {
+                if (lowerServiceOwnTitle === 'communion' || lowerServiceOwnTitle === 'communion service') {
+                    let parsedTime = parseTime(service.Time);
+                    if (parsedTime && parsedTime.hours >= 16) { 
+                        return `${service.DayOfWeek || 'Day not specified'} Evening`;
+                    } else if (service.Time) { 
+                        return `${service.DayOfWeek || 'Day not specified'} at ${service.Time}`;
+                    } else { 
+                        return `${service.DayOfWeek || 'Day not specified'}`;
+                    }
+                }
+                
+                let baseRuleDesc = service.RelativeToServiceID || 'specified rule';
+                if (typeof allServicesData !== 'undefined' && allServicesData.length > 0) {
+                    const baseService = allServicesData.find(s_lookup => 
+                        s_lookup.ServiceID === service.RelativeToServiceID && 
+                        s_lookup.ChurchID === churchId 
+                    );
+                    if (baseService && baseService.ServiceTitle) {
+                        baseRuleDesc = `"${baseService.ServiceTitle}" (${service.RelativeToServiceID})`;
+                    }
+                }
+                
+                let offsetDesc = "";
+                const offsetDays = parseInt(service.RelativeOffsetDays, 10);
+                if (offsetDays === 0) offsetDesc = "on the same day as";
+                else if (offsetDays === -1) offsetDesc = "the day before";
+                else if (offsetDays === 1) offsetDesc = "the day after";
+                else if (offsetDays < -1) offsetDesc = `${Math.abs(offsetDays)} days before`;
+                else if (offsetDays > 1) offsetDesc = `${offsetDays} days after`;
+                else offsetDesc = ""; 
+
+                description = `${service.DayOfWeek || 'Day not specified'}${timeText}, ${offsetDesc} ${baseRuleDesc}`;
+                return `${description}${communionSuffix}${durationText}`;
+
+            } else if (service.RecurrenceType === 'Weekly') {
+                description = `Every ${service.DayOfWeek || ''}${timeText}`;
+                return `${description}${communionSuffix}${durationText}`;
+            } else {
+                description = `Rule: ${service.RecurrenceRule || 'Not specified'}${timeText}`; 
+                return `${description}${communionSuffix}${durationText}`;
             }
-            
-            let offsetDesc = "";
-            const offsetDays = parseInt(service.RelativeOffsetDays, 10);
-            if (offsetDays === 0) offsetDesc = "on the same day as";
-            else if (offsetDays === -1) offsetDesc = "the day before";
-            else if (offsetDays === 1) offsetDesc = "the day after";
-            else if (offsetDays < -1) offsetDesc = `${Math.abs(offsetDays)} days before`;
-            else if (offsetDays > 1) offsetDesc = `${offsetDays} days after`;
-            else offsetDesc = ""; 
-
-            description = `${service.DayOfWeek || 'Day not specified'}${timeText}, ${offsetDesc} ${baseRuleDesc}`;
-            return `${description}${communionSuffix}${durationText}`;
-
-        } else if (service.RecurrenceType === 'Weekly') {
-            // Weekly services are now primarily formatted directly in displayServicesInModal.
-            // This is a fallback if this helper is called for a weekly type.
-            description = `Every ${service.DayOfWeek || ''}${timeText}`;
-            return `${description}${communionSuffix}${durationText}`;
-        } else {
-            description = `Rule: ${service.RecurrenceRule || 'Not specified'}${timeText}`; // Fallback
-            return `${description}${communionSuffix}${durationText}`;
         }
-    }
 
 
         async function geocodeAddressWithNominatim(address) {
@@ -787,16 +851,19 @@ function formatServiceRuleDescription(service, churchId, serviceHeaderTitle = ""
         async function loadInitialData() {
             displayStatus("Loading data...", false, false); 
             try {
-                const [churches, ministers, services,specialEvents ] = await Promise.all([
+                const [churches, ministers, services,specialEvents,eventParticipants ] = await Promise.all([
                     fetchSheetDataForStaticPage("Churches"),
                     fetchSheetDataForStaticPage("Ministers"),
                     fetchSheetDataForStaticPage("Services"),
-                     fetchSheetDataForStaticPage("Events")
+                    fetchSheetDataForStaticPage("Events"),
+                    fetchSheetDataForStaticPage("EventParticipants")
                 ]);
                 allChurchesData = churches || [];
                 allMinistersData = ministers || [];
                 allServicesData = services || [];
                 allSpecialEventsData = specialEvents || [];
+                allEventParticipantsData = eventParticipants || [];
+
                 populateChurchesTable();
                 displayStatus("Data loaded successfully!", false, true);
             } catch (err) {
