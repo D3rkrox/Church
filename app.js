@@ -38,6 +38,14 @@ function getEventColors(eventType) {
     return eventTypeColors[typeStr] || eventTypeColors["default"];
 }
 
+function debounce(func, delay) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
 let allEventsData = [];
 let allChurchesData = [];
 let allMinistersData = [];
@@ -50,6 +58,7 @@ let calendar;
 var eventDetailModalInstance;
 var filterCollapseInstance; 
 let previousCalendarViewType = null; 
+let currentSearchTerm  = ""
 
 let activeFilters = {
     eventType: new Set(),
@@ -514,7 +523,44 @@ function handleParticipantFilterChange(e) { if(e.target) handleAddFilter('partic
 
 function applyFilters() {
     // Removed the setTimeout wrapper
+    const noResultsMessageEl = document.getElementById('noResultsMessage');
     let eventsToDisplay = processDataForCalendar(); 
+    const searchTerm = currentSearchTerm.toLowerCase().trim();
+    if (searchTerm) {
+        eventsToDisplay = eventsToDisplay.filter(fcEvent => {
+            const title = String(fcEvent.title || '').toLowerCase();
+            const eventType = String(fcEvent.extendedProps.EventType || '').toLowerCase();
+            const churchName = String(fcEvent.extendedProps.ChurchName || (allChurchesData.find(c => c.ChurchID === fcEvent.extendedProps.ChurchID)?.ChurchName || '')).toLowerCase();
+            
+            // --- NEW: Search participants ---
+            let participantMatch = false;
+            const originalEventID = String(fcEvent.extendedProps.EventID || fcEvent.extendedProps.EventIDBase).trim();
+            if (originalEventID) {
+                const participantsInThisEvent = allEventParticipantsData.filter(p => p && String(p.EventID).trim() === originalEventID);
+                if (participantsInThisEvent.length > 0) {
+                    participantMatch = participantsInThisEvent.some(participant => {
+                        let nameToCheck = null;
+                        if (participant.ParticipantNameOverride) { 
+                            nameToCheck = String(participant.ParticipantNameOverride).trim(); 
+                        } else if (participant.MinisterID && allMinistersData) {
+                            const minister = allMinistersData.find(m => m && String(m.MinisterID).trim() === String(participant.MinisterID).trim());
+                            if (minister && minister.Name) nameToCheck = String(minister.Name).trim();
+                        } else if (participant.GroupID && allGroupsData) {
+                            const group = allGroupsData.find(g => g && String(g.GroupID).trim() === String(participant.GroupID).trim());
+                            if (group && group.GroupName) nameToCheck = String(group.GroupName).trim();
+                        }
+                        return nameToCheck && nameToCheck.toLowerCase().includes(searchTerm);
+                    });
+                }
+            }
+            // --- END NEW ---
+
+            return title.includes(searchTerm) || 
+                   eventType.includes(searchTerm) ||
+                   churchName.includes(searchTerm) ||
+                   participantMatch; // Add participant check to the return
+        });
+    }
     
     if (activeFilters.eventType.size > 0) {
         eventsToDisplay = eventsToDisplay.filter(fcEvent => fcEvent.extendedProps && [...activeFilters.eventType].some(typeFilter => String(fcEvent.extendedProps.EventType || "").trim() === typeFilter));
@@ -547,6 +593,16 @@ function applyFilters() {
     if (!regularServicesChecked) { 
         eventsToDisplay = eventsToDisplay.filter(fcEvent => fcEvent.extendedProps.sourceType && fcEvent.extendedProps.sourceType.startsWith('special-event'));
     }
+
+    if (noResultsMessageEl) {
+        if (eventsToDisplay.length === 0 && (searchTerm || activeFilters.eventType.size > 0 || activeFilters.church.size > 0 || activeFilters.participant.size > 0)) {
+            noResultsMessageEl.textContent = `No events match your current filters${searchTerm ? ` and search for "${currentSearchTerm}"` : ''}.`;
+            noResultsMessageEl.style.display = 'block';
+        } else {
+            noResultsMessageEl.style.display = 'none';
+        }
+    }
+
     renderCalendar(eventsToDisplay); // This will trigger FullCalendar's loading(true) then loading(false)
 }
 
@@ -700,6 +756,19 @@ document.addEventListener('DOMContentLoaded', function() {
             
             handleCheckboxChange(); 
             previousCalendarViewType = newViewType; 
+        },
+        eventContent: function(arg) {
+            let eventTitleEl = document.createElement('div');
+            eventTitleEl.className = 'fc-event-title-container';
+            let eventTitle = arg.event.title; 
+            const searchTerm = currentSearchTerm.trim();
+            if (searchTerm && !arg.event.extendedProps.isPlaceholder) { 
+                const cleanSearchTerm = searchTerm.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'); // Escape special regex characters
+                const regex = new RegExp(cleanSearchTerm, 'gi'); 
+                eventTitle = eventTitle.replace(regex, (match) => `<mark>${match}</mark>`);
+            }
+            eventTitleEl.innerHTML = eventTitle; 
+            return { domNodes: [eventTitleEl] };
         },
 eventClick: function(info) {
     if (!eventDetailModalInstance) {
@@ -966,6 +1035,15 @@ eventClick: function(info) {
     }
     if (includeRegularServicesFilterEl) {
         includeRegularServicesFilterEl.addEventListener('change', handleCheckboxChange);
+    }
+    
+    const calendarSearchInputEl = document.getElementById('calendarSearchInput');
+    if (calendarSearchInputEl) {
+        const debouncedApplyFilters = debounce(applyFilters, 400); // 400ms delay
+        calendarSearchInputEl.addEventListener('input', function(e) {
+            currentSearchTerm = e.target.value;
+            debouncedApplyFilters(); 
+        });
     }
 
     initializeApp();  
